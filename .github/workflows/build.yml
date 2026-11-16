@@ -1,0 +1,81 @@
+# Builds Termite for Windows (installer and portable .exe), Linux (AppImage and .deb) and Android (.apk),
+# zips each one and attaches the zips to the release named in "release_tag".
+name: Build Termite
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag
+        default: termite-v1.0
+permissions:
+  contents: write
+env:
+  TAG: ${{ github.event.inputs.release_tag || 'termite-v1.0' }}
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-audit --no-fund
+      - run: npm run dist:win
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
+      - name: Zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/Termite-Setup-*.exe -DestinationPath Termite-Windows-Installer.zip
+          Compress-Archive -Path dist/Termite-*-portable.exe -DestinationPath Termite-Windows-Portable.zip
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: "Termite-Windows-*.zip" }
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-audit --no-fund
+      - run: npm run dist:linux
+      - run: cd dist && zip -9 ../Termite-Linux.zip *.AppImage *.deb
+      - uses: actions/upload-artifact@v4
+        with: { name: linux, path: Termite-Linux.zip }
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Build APK
+        working-directory: android
+        run: gradle assembleRelease --no-daemon --stacktrace
+      - run: |
+          cp android/app/build/outputs/apk/release/app-release.apk Termite.apk
+          zip -9 Termite-Android.zip Termite.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: Termite-Android.zip }
+
+  release:
+    needs: [windows, linux, android]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: Termite 1.0
+          target_commitish: ${{ github.sha }}
+          files: "*.zip"
+          body: |
+            Termite 1.0: read, mark up and fill PDFs; write and save Word documents; share by email, WhatsApp or Bluetooth.
+            - Termite-Windows-Installer.zip: unzip and run Termite-Setup to install (adds a Start menu entry).
+            - Termite-Windows-Portable.zip: unzip and run the .exe, no install needed.
+            - Termite-Linux.zip: an AppImage (make it executable and run it) and a .deb for Debian/Ubuntu.
+            - Termite-Android.zip: unzip on the phone and tap Termite.apk to install.

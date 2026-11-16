@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Termite</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lib/pdf_viewer.css">
+<style>
+/* Layout idea: a workbench. Slim toolbar on top, a drawer for pages and bookmarks on the left, the document on a quiet desk in the middle. */
+:root{
+  --desk:#e7e9ec; --panel:#f8f9fa; --ink:#1c2430; --muted:#566170; --line:#d3d8de;
+  --amber:#a8520a; --amber-soft:#fbe9d7; --on-amber:#ffffff; --danger:#b42318;
+  --display:'Bricolage Grotesque','Segoe UI',sans-serif; --body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){color-scheme:dark;
+    --desk:#14181d; --panel:#1d232a; --ink:#e8ecf0; --muted:#a3adb8; --line:#333c46;
+    --amber:#f2a35a; --amber-soft:#3a2614; --on-amber:#1d1206; --danger:#ff8a80;}
+}
+:root[data-theme="dark"]{color-scheme:dark;
+  --desk:#14181d; --panel:#1d232a; --ink:#e8ecf0; --muted:#a3adb8; --line:#333c46;
+  --amber:#f2a35a; --amber-soft:#3a2614; --on-amber:#1d1206; --danger:#ff8a80;}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--desk);color:var(--ink);font-family:var(--body);font-size:14px;display:flex;flex-direction:column;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.hide{display:none!important}
+
+.bar{background:var(--panel);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 12px}
+.brand{display:flex;align-items:center;gap:8px;font-family:var(--display);font-size:20px;font-weight:700;color:var(--amber);margin-right:4px}
+.brand svg{flex:none}
+.fname{color:var(--muted);max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grp{display:flex;align-items:center;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--desk)}
+.tb{background:transparent;border:0;border-radius:6px;min-width:34px;height:32px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.tb:hover:not(:disabled){background:var(--amber-soft)}
+.tb:disabled{opacity:.4;cursor:default}
+.tb[aria-pressed="true"]{background:var(--amber);color:var(--on-amber)}
+.tb svg{width:18px;height:18px;flex:none}
+.primary{background:var(--amber);color:var(--on-amber);font-weight:600}
+.primary:hover:not(:disabled){background:var(--amber);filter:brightness(1.08)}
+.pg{width:46px;text-align:center;background:var(--panel);border:1px solid var(--line);border-radius:6px;height:28px;font-variant-numeric:tabular-nums}
+.of{color:var(--muted);font-variant-numeric:tabular-nums;padding:0 4px;white-space:nowrap}
+select.zoom{background:var(--panel);border:1px solid var(--line);border-radius:6px;height:28px;padding:0 4px}
+.find{display:flex;align-items:center;gap:4px;margin-left:auto}
+.find input{width:170px;height:30px;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:0 8px}
+.count{color:var(--muted);font-size:12px;min-width:56px;font-variant-numeric:tabular-nums}
+.sw{width:28px;height:28px;border:1px solid var(--line);border-radius:6px;padding:2px;background:var(--panel)}
+
+.work{flex:1;display:flex;min-height:0}
+.side{width:220px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;background:none;border:0;border-bottom:2px solid transparent;padding:9px 4px;color:var(--muted);font-weight:500}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--amber)}
+.list{flex:1;overflow-y:auto;padding:10px}
+.thumb{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px;border-radius:8px;border:2px solid transparent;background:none;width:100%}
+.thumb canvas,.thumb .ph{max-width:100%;box-shadow:0 1px 3px rgba(0,0,0,.25);background:#fff}
+.thumb .ph{width:120px;height:160px}
+.thumb span{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.thumb[aria-current="true"]{border-color:var(--amber)}
+.outline,.outline ul{list-style:none;margin:0;padding:0}
+.outline ul{padding-left:14px}
+.outline button{background:none;border:0;text-align:left;width:100%;padding:6px 8px;border-radius:6px;line-height:1.3}
+.outline button:hover{background:var(--amber-soft)}
+.empty{color:var(--muted);padding:8px;line-height:1.5}
+
+.stage{flex:1;position:relative;min-width:0}
+#viewerContainer{position:absolute;inset:0;overflow:auto;background:var(--desk)}
+#viewerContainer.dim .page{filter:invert(.9) hue-rotate(180deg)}
+.pdfViewer .page{box-shadow:0 2px 10px rgba(0,0,0,.18);border:0;margin:14px auto}
+.drop{position:absolute;inset:12px;border:3px dashed var(--amber);border-radius:16px;background:color-mix(in srgb,var(--amber-soft) 85%,transparent);display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:26px;color:var(--amber);z-index:20;pointer-events:none}
+.status{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:8px;z-index:30;max-width:90%;text-align:center}
+
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:20px;max-width:min(460px,92vw)}
+dialog::backdrop{background:rgba(10,14,20,.5)}
+dialog h2{font-family:var(--display);margin:0 0 10px;font-size:22px;text-wrap:balance}
+dialog input[type=password]{width:100%;height:36px;border:1px solid var(--line);border-radius:6px;background:var(--desk);padding:0 10px;margin:8px 0}
+.err{color:var(--danger);min-height:1.2em;margin:0}
+.acts{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.btn{border:1px solid var(--line);border-radius:8px;background:var(--desk);padding:8px 14px}
+dl.props{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0}
+dl.props dt{color:var(--muted)} dl.props dd{margin:0;overflow-wrap:anywhere}
+dialog p.muted{color:var(--muted);line-height:1.5;margin:0 0 10px}
+dialog label{display:block;margin:12px 0;font-size:13px;color:var(--muted)}
+dialog label select,dialog label textarea,dialog label input,dialog>input[type=file]{display:block;width:100%;margin-top:5px;color:var(--ink);background:var(--desk);border:1px solid var(--line);border-radius:6px;padding:9px;font-family:inherit}
+dialog label textarea{resize:vertical}
+dialog label input[type=checkbox],dialog label input[type=radio]{display:inline-block;width:auto;margin:0 6px 0 0;padding:0;vertical-align:middle}
+.fmt label{margin:0;color:var(--ink)}
+
+.contents{display:contents}
+.modes{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.modes button{border:0;background:var(--desk);padding:6px 14px;font-weight:600;color:var(--muted)}
+.modes button[aria-selected="true"]{background:var(--amber);color:var(--on-amber)}
+.ribbon{background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;padding:6px 12px;overflow-x:auto;scrollbar-width:thin}
+.ribbon .grp{flex:none}
+.ribbon select{background:var(--panel);border:1px solid var(--line);border-radius:6px;height:30px;padding:0 4px}
+.ribbon .docname{height:30px;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:0 8px;width:150px;flex:none}
+.ribbon .tb b,.ribbon .tb i,.ribbon .tb u,.ribbon .tb s{font-family:Georgia,serif;font-size:16px}
+.swl{position:relative;display:inline-flex;align-items:center;justify-content:center;width:34px;height:32px;border-radius:6px;cursor:pointer}
+.swl:hover{background:var(--amber-soft)}
+.swl input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.swl span{font-family:Georgia,serif;font-weight:700;font-size:16px;border-bottom:4px solid var(--c);line-height:1.1;padding:0 3px}
+.wstage{flex:1;overflow:auto;background:var(--desk);display:flex;flex-direction:column;align-items:center;padding:24px 12px 30px;min-width:0}
+.paper{background:#fff;color:#000;width:794px;max-width:100%;min-height:1123px;padding:96px;box-shadow:0 2px 12px rgba(0,0,0,.18);font:11pt/1.45 Calibri,Carlito,'IBM Plex Sans',Arial,sans-serif;outline:none;overflow-wrap:break-word;position:relative;flex:none;color-scheme:light}
+.paper p{margin:0 0 8pt}
+.paper h1,.paper h2,.paper h3{color:#1F3864;margin:14pt 0 6pt;line-height:1.2}
+.paper h1{font-size:20pt}.paper h2{font-size:16pt}.paper h3{font-size:13pt}
+.paper h1.title{font-size:28pt;font-weight:400;color:#000;margin-top:0}
+.paper pre{font:10pt/1.4 'Courier New',monospace;white-space:pre-wrap;margin:0 0 8pt}
+.paper ul,.paper ol{margin:0 0 8pt;padding-left:28pt}
+.paper table{border-collapse:collapse;width:100%;margin:0 0 8pt}
+.paper td,.paper th{border:1px solid #888;padding:4px 6px;vertical-align:top;min-width:30px}
+.paper th{background:#eef1f5}
+.paper img{max-width:100%;height:auto}
+.paper a{color:#0563C1}
+.paper hr{border:0;border-top:1px solid #999;margin:10pt 0}
+.paper hr.pb{border-top:2px dashed #b5b5b5;margin:22px 0}
+.paper.blank::before{content:'Start typing…';color:#9aa0a6;position:absolute;top:96px;left:96px;pointer-events:none}
+.paper.printing{position:absolute;left:0;top:0;min-height:0;padding:0 96px;box-shadow:none;width:794px;max-width:none}
+#printbay{position:fixed;left:-12000px;top:0;width:794px}
+.wfoot{color:var(--muted);font-size:12px;margin-top:10px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center;font-variant-numeric:tabular-nums}
+#dlg-find{position:fixed;top:120px;right:16px;left:auto;margin:0;z-index:40;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+#dlg-find input[type=text]{width:100%;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--desk);padding:0 8px;margin:4px 0 8px}
+.fld{display:block;margin:8px 0}
+.fld input[type=number],.fld input[type=url],.fld input[type=text]{display:block;width:100%;height:34px;border:1px solid var(--line);border-radius:6px;background:var(--desk);padding:0 8px;margin-top:4px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.shgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 6px}
+.sbtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;border:1px solid var(--line);border-radius:10px;background:var(--desk);text-decoration:none;color:var(--ink);font-weight:600;font-size:13px}
+.sbtn:hover{border-color:var(--amber)}
+.sbtn svg{width:26px;height:26px}
+.sbtn[aria-pressed="true"]{border-color:var(--amber);background:var(--amber-soft)}
+.fmt{display:flex;gap:8px;margin:6px 0 10px}
+.fmt label{flex:1;border:1px solid var(--line);border-radius:8px;padding:8px;display:flex;gap:6px;align-items:center;cursor:pointer}
+.btn.primary{background:var(--amber);color:var(--on-amber);border-color:var(--amber);font-weight:600}
+.fmt input{width:auto!important;margin:0!important;flex:none}
+.help{background:var(--desk);border-radius:8px;padding:10px 12px;line-height:1.5;margin:8px 0 0}
+.help:empty{display:none}
+.muted{color:var(--muted);line-height:1.5;margin:0 0 6px}
+@media (max-width:760px){
+  .paper{padding:28px 20px;min-height:70vh}
+  .paper.blank::before{top:28px;left:20px}
+  .wstage{padding:10px 6px 24px}
+  .side{position:absolute;z-index:15;top:0;bottom:0;left:0;box-shadow:4px 0 16px rgba(0,0,0,.2)}
+  .work{position:relative}
+  .find{margin-left:0;width:100%} .find input{flex:1;width:auto}
+  .fname,.lbl{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header class="bar" role="toolbar" aria-label="Termite toolbar">
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><ellipse cx="13" cy="6" rx="4" ry="4" fill="currentColor"/><ellipse cx="13" cy="13" rx="3.4" ry="3.4" fill="currentColor"/><ellipse cx="13" cy="21" rx="4.6" ry="4.6" fill="currentColor"/><path d="M9 4 5 1M17 4l4-3M10 13H4M16 13h6M10 19l-5 4M16 19l5 4M10 11 5 8M16 11l5-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+    Termite
+  </div>
+  <div class="modes" role="tablist" aria-label="Mode">
+    <button role="tab" id="m-pdf" aria-selected="true">PDF</button>
+    <button role="tab" id="m-write" aria-selected="false">Word</button>
+  </div>
+  <button class="tb primary" id="b-open" title="Open a PDF or Word file (Ctrl+O)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="lbl">Open</span></button>
+  <input type="file" id="file" accept="application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.doc,.txt,.md,.html,.htm" class="hide">
+  <div class="contents" id="pdfbar">
+  <button class="tb" id="b-new" title="New blank document to type on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 11v6M9 14h6"/></svg><span class="lbl">New</span></button>
+  <span class="fname" id="fname">welcome.pdf</span>
+  <button class="tb" id="b-side" aria-pressed="true" title="Pages and bookmarks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg><span class="lbl">Pages</span></button>
+
+  <div class="grp" role="group" aria-label="Pages">
+    <button class="tb" id="b-prev" aria-label="Previous page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+    <input class="pg" id="pg" inputmode="numeric" aria-label="Page number" value="1">
+    <span class="of" id="of">of 1</span>
+    <button class="tb" id="b-next" aria-label="Next page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+  </div>
+
+  <div class="grp" role="group" aria-label="Zoom">
+    <button class="tb" id="b-zout" aria-label="Zoom out">−</button>
+    <select class="zoom" id="zoom" aria-label="Zoom level">
+      <option value="page-width">Fit width</option><option value="page-fit">Fit page</option><option value="auto">Automatic</option>
+      <option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option><option value="1.25">125%</option>
+      <option value="1.5">150%</option><option value="2">200%</option><option value="3">300%</option><option value="custom" hidden></option>
+    </select>
+    <button class="tb" id="b-zin" aria-label="Zoom in">+</button>
+    <button class="tb" id="b-rot" title="Rotate clockwise (R)" aria-label="Rotate clockwise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+    <button class="tb" id="b-scroll" aria-pressed="false" title="One page at a time" aria-label="One page at a time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/></svg></button>
+  </div>
+
+  <div class="grp" role="group" aria-label="Markup tools">
+    <button class="tb" id="t-none" aria-pressed="true" title="Select text (Esc)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="m5 3 14 8-6 2-2 6z"/></svg><span class="lbl">Select</span></button>
+    <button class="tb" id="t-hl" aria-pressed="false" title="Highlight text (H)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg><span class="lbl">Highlight</span></button>
+    <button class="tb" id="t-ink" aria-pressed="false" title="Draw (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span class="lbl">Pen</span></button>
+    <button class="tb" id="t-text" aria-pressed="false" title="Add text (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg><span class="lbl">Text</span></button>
+    <input type="color" class="sw" id="colour" value="#d1191f" aria-label="Pen and text colour" title="Pen and text colour">
+  </div>
+
+  <button class="tb" id="b-save" title="Save a copy with your form entries and markings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg><span class="lbl">Save copy</span></button>
+  <button class="tb" id="b-toword" title="Turn this PDF into an editable Word document"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13l1.5 5 2.5-4 2.5 4L16 13"/></svg><span class="lbl">Edit as Word</span></button>
+  <button class="tb" id="b-props" title="Document properties" aria-label="Document properties"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h0"/></svg></button>
+  <button class="tb" id="b-dim" aria-pressed="false" title="Night reading (dark pages)" aria-label="Night reading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg></button>
+
+  <div class="grp" role="group" aria-label="Share and privacy">
+    <button class="tb" id="b-share" title="Send by WhatsApp, email or Bluetooth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg><span class="lbl">Share</span></button>
+    <button class="tb" id="b-hide" title="Hide this document inside an ordinary-looking file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><path d="M4 4l16 16"/></svg><span class="lbl">Hide</span></button>
+    <button class="tb" id="b-reveal" title="Reveal a document hidden in a carrier file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span class="lbl">Reveal</span></button>
+  </div>
+
+  <div class="find" role="search">
+    <input type="search" id="q" placeholder="Find in document" aria-label="Find in document">
+    <button class="tb" id="f-prev" aria-label="Previous match"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
+    <button class="tb" id="f-next" aria-label="Next match"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+    <span class="count" id="count" aria-live="polite"></span>
+  </div>
+  </div>
+</header>
+
+<div class="ribbon hide" id="wbar" role="toolbar" aria-label="Word toolbar">
+  <input class="docname" id="w-name" aria-label="Document name" value="Untitled">
+  <div class="grp" role="group" aria-label="File">
+    <button class="tb" id="w-new" title="New document">New</button>
+    <button class="tb primary" id="w-save" title="Save as Word (Ctrl+S)">Save .docx</button>
+    <button class="tb" id="w-pdf" title="Make a PDF of this document">Make PDF</button>
+    <button class="tb" id="w-share" title="Send by email, WhatsApp or Bluetooth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>Share</button>
+  </div>
+  <div class="grp" role="group" aria-label="Undo">
+    <button class="tb" id="w-undo" aria-label="Undo" title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+    <button class="tb" id="w-redo" aria-label="Redo" title="Redo (Ctrl+Y)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+  </div>
+  <select id="w-style" aria-label="Paragraph style"><option value="p">Normal</option><option value="title">Title</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="pre">Code</option></select>
+  <select id="w-font" aria-label="Font"><option>Calibri</option><option>Arial</option><option>Times New Roman</option><option>Georgia</option><option>Garamond</option><option>Verdana</option><option>Tahoma</option><option>Courier New</option><option>Comic Sans MS</option></select>
+  <select id="w-size" aria-label="Font size"><option>8</option><option>9</option><option>10</option><option selected>11</option><option>12</option><option>14</option><option>16</option><option>18</option><option>20</option><option>24</option><option>28</option><option>36</option><option>48</option><option>72</option></select>
+  <div class="grp" role="group" aria-label="Character">
+    <button class="tb" id="w-b" data-cmd="bold" aria-pressed="false" aria-label="Bold" title="Bold (Ctrl+B)"><b>B</b></button>
+    <button class="tb" id="w-i" data-cmd="italic" aria-pressed="false" aria-label="Italic" title="Italic (Ctrl+I)"><i>I</i></button>
+    <button class="tb" id="w-u" data-cmd="underline" aria-pressed="false" aria-label="Underline" title="Underline (Ctrl+U)"><u>U</u></button>
+    <button class="tb" id="w-s" data-cmd="strikeThrough" aria-pressed="false" aria-label="Strikethrough"><s>S</s></button>
+    <button class="tb" data-cmd="superscript" aria-label="Superscript">x²</button>
+    <button class="tb" data-cmd="subscript" aria-label="Subscript">x₂</button>
+    <label class="swl" title="Text colour" style="--c:#c00000"><span>A</span><input type="color" id="w-color" value="#c00000" aria-label="Text colour"></label>
+    <label class="swl" title="Highlight" style="--c:#ffe14d"><span style="background:#ffe14d;border-bottom-color:transparent">ab</span><input type="color" id="w-hl" value="#ffe14d" aria-label="Highlight colour"></label>
+    <button class="tb" data-cmd="removeFormat" aria-label="Clear formatting" title="Clear formatting"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4l-3 16M3 3l18 18"/></svg></button>
+  </div>
+  <div class="grp" role="group" aria-label="Paragraph">
+    <button class="tb" id="w-ul" data-cmd="insertUnorderedList" aria-pressed="false" aria-label="Bullets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg></button>
+    <button class="tb" id="w-ol" data-cmd="insertOrderedList" aria-pressed="false" aria-label="Numbering"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10M4 4v4M3 18h3l-3 3h3"/></svg></button>
+    <button class="tb" data-cmd="outdent" aria-label="Decrease indent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 5H3M21 19H3M21 12h-9M7 9l-3 3 3 3"/></svg></button>
+    <button class="tb" data-cmd="indent" aria-label="Increase indent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 5H3M21 19H3M21 12h-9M4 9l3 3-3 3"/></svg></button>
+    <button class="tb" id="w-al" data-cmd="justifyLeft" aria-pressed="false" aria-label="Align left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h12M3 18h16"/></svg></button>
+    <button class="tb" id="w-ac" data-cmd="justifyCenter" aria-pressed="false" aria-label="Centre"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M6 12h12M4 18h16"/></svg></button>
+    <button class="tb" id="w-ar" data-cmd="justifyRight" aria-pressed="false" aria-label="Align right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M9 12h12M5 18h16"/></svg></button>
+    <button class="tb" id="w-aj" data-cmd="justifyFull" aria-pressed="false" aria-label="Justify"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+  </div>
+  <div class="grp" role="group" aria-label="Insert">
+    <button class="tb" id="w-table" title="Insert table" aria-label="Insert table"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg></button>
+    <button class="tb" id="w-img" title="Insert picture" aria-label="Insert picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 17-5-5-9 8"/></svg></button>
+    <input type="file" id="w-imgfile" accept="image/png,image/jpeg,image/gif" class="hide">
+    <button class="tb" id="w-link" title="Insert link" aria-label="Insert link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></button>
+    <button class="tb" id="w-pb" title="Insert page break" aria-label="Insert page break"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 3v6h14V3M5 21v-6h14v6M2 12h3M9 12h2M13 12h2M19 12h3"/></svg></button>
+  </div>
+  <button class="tb" id="w-find" title="Find and replace (Ctrl+H)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><span class="lbl">Replace</span></button>
+  <select id="w-zoom" aria-label="Zoom"><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select>
+</div>
+
+<div class="work">
+  <aside class="side" id="side" aria-label="Pages and bookmarks">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-pages" aria-selected="true">Pages</button>
+      <button role="tab" id="tab-marks" aria-selected="false">Bookmarks</button>
+    </div>
+    <div class="list" id="pages" role="tabpanel" aria-labelledby="tab-pages"></div>
+    <div class="list hide" id="marks" role="tabpanel" aria-labelledby="tab-marks"></div>
+  </aside>
+  <main class="stage" id="stage">
+    <div id="viewerContainer" tabindex="0" aria-label="Document"><div id="viewer" class="pdfViewer"></div></div>
+    <div class="drop hide" id="drop">Drop a PDF or Word file to open it</div>
+  </main>
+  <main class="wstage hide" id="wstage">
+    <div class="paper" id="doc" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Document"></div>
+    <div class="wfoot"><span id="w-count"></span><span id="w-saved"></span></div>
+  </main>
+  <div class="status hide" id="status" role="status"></div>
+</div>
+<div id="printbay" aria-hidden="true"></div>
+
+<dialog id="dlg-share" aria-labelledby="sh-h">
+  <h2 id="sh-h">Send</h2>
+  <div class="fmt hide" id="sh-fmt"></div>
+  <p class="muted" id="sh-note">Termite runs inside Claude, which can't pass a file straight to another app. So: save it first, then pick how to send the saved file.</p>
+  <button class="btn primary" id="sh-save" style="width:100%">1. Save the file to this device</button>
+  <p class="muted" style="margin-top:10px">2. Send it with</p>
+  <div class="shgrid">
+    <a class="sbtn" id="sh-wa" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21l1.6-4.7A8.5 8.5 0 1 1 8 19.6z"/><path d="M9 9.5c.3 2 2.5 4.6 5 5l1-1.4-1.8-.9-.8.8c-.9-.4-1.8-1.3-2.2-2.2l.8-.8-.9-1.8z"/></svg>WhatsApp</a>
+    <a class="sbtn" id="sh-mail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>Email</a>
+    <button class="sbtn" id="sh-bt" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>Bluetooth</button>
+  </div>
+  <p class="help" id="sh-help" aria-live="polite"></p>
+  <div class="acts"><button class="btn hide" id="sh-copy">Copy the text</button><button class="btn" id="sh-close">Done</button></div>
+</dialog>
+<dialog id="dlg-ask" aria-labelledby="ask-h">
+  <h2 id="ask-h">Are you sure?</h2>
+  <p class="muted" id="ask-msg"></p>
+  <div class="acts"><button class="btn" id="ask-no">Cancel</button><button class="btn primary" id="ask-yes">OK</button></div>
+</dialog>
+<dialog id="dlg-table" aria-labelledby="tb-h">
+  <form id="tb-form"><h2 id="tb-h">Insert a table</h2>
+    <div class="row2"><label class="fld">Rows<input type="number" id="tb-r" value="3" min="1" max="50"></label><label class="fld">Columns<input type="number" id="tb-c" value="3" min="1" max="12"></label></div>
+    <label class="fld"><input type="checkbox" id="tb-h" checked> First row is a header</label>
+    <div class="acts"><button type="button" class="btn" id="tb-cancel">Cancel</button><button class="btn primary">Insert</button></div></form>
+</dialog>
+<dialog id="dlg-link" aria-labelledby="ln-h">
+  <form id="ln-form"><h2 id="ln-h">Insert a link</h2>
+    <label class="fld">Web address<input type="url" id="ln-url"></label>
+    <label class="fld">Text to show<input type="text" id="ln-text"></label>
+    <div class="acts"><button type="button" class="btn" id="ln-cancel">Cancel</button><button class="btn primary">Insert</button></div></form>
+</dialog>
+<dialog id="dlg-find" aria-labelledby="fr-h">
+  <h2 id="fr-h" style="font-size:18px">Find and replace</h2>
+  <label>Find<input type="text" id="fr-q"></label>
+  <label>Replace with<input type="text" id="fr-r"></label>
+  <label><input type="checkbox" id="fr-case"> Match case</label> <span class="count" id="fr-n"></span>
+  <div class="acts" style="flex-wrap:wrap"><button class="btn" id="fr-prev">Previous</button><button class="btn" id="fr-next">Next</button><button class="btn" id="fr-one">Replace</button><button class="btn" id="fr-all">Replace all</button><button class="btn" id="fr-close">Close</button></div>
+</dialog>
+
+<dialog id="dlg-pw" aria-labelledby="pw-h">
+  <form method="dialog" id="pw-form">
+    <h2 id="pw-h">This PDF is password protected</h2>
+    <label for="pw">Enter the password to open it</label>
+    <input type="password" id="pw" autocomplete="off">
+    <p class="err" id="pw-err"></p>
+    <div class="acts"><button class="btn" value="cancel" type="button" id="pw-cancel">Cancel</button><button class="btn primary" value="ok" id="pw-ok">Open</button></div>
+  </form>
+</dialog>
+<dialog id="dlg-props" aria-labelledby="pr-h">
+  <h2 id="pr-h">Document properties</h2>
+  <dl class="props" id="props"></dl>
+  <div class="acts"><button class="btn" id="pr-close">Close</button></div>
+</dialog>
+<dialog id="dlg-hide" aria-labelledby="hi-h">
+  <h2 id="hi-h">Hide this document</h2>
+  <p class="muted">Termite tucks the open PDF inside an everyday-looking carrier file. Good for keeping something private from a casual look — but the carrier ends up larger than normal and forensic tools can still detect hidden data, so don't rely on it against a determined examiner. Add a passphrase to encrypt it as well.</p>
+  <label>Carrier type
+    <select id="hi-type">
+      <option value="pdf">Blank PDF page</option>
+      <option value="png">Blank image (PNG)</option>
+      <option value="wav">Music / audio (WAV)</option>
+      <option value="webm">Video clip (WEBM)</option>
+      <option value="txt">Plain text (invisible characters)</option>
+    </select>
+  </label>
+  <label id="hi-coverwrap" class="hide">Cover text (what the file appears to say)
+    <textarea id="hi-cover" rows="3">Meeting notes — nothing important here.</textarea>
+  </label>
+  <label>Passphrase — optional, encrypts before hiding
+    <input type="password" id="hi-pass" autocomplete="off" placeholder="Leave blank for no encryption">
+  </label>
+  <p class="err" id="hi-err"></p>
+  <div class="acts"><button class="btn" id="hi-cancel">Cancel</button><button class="btn primary" id="hi-go">Create carrier</button></div>
+</dialog>
+<dialog id="dlg-reveal" aria-labelledby="rv-h">
+  <h2 id="rv-h">Reveal a hidden document</h2>
+  <p class="muted">Choose a carrier file you saved from Termite's Hide tool. If it was locked, enter the passphrase.</p>
+  <input type="file" id="rv-file" aria-label="Carrier file">
+  <label>Passphrase, if the file was locked
+    <input type="password" id="rv-pass" autocomplete="off">
+  </label>
+  <p class="err" id="rv-err"></p>
+  <div class="acts"><button class="btn" id="rv-cancel">Cancel</button><button class="btn primary" id="rv-go">Reveal</button></div>
+</dialog>
+
+<script type="module">
+const $ = s => document.querySelector(s);
+const status = (msg, ms = 3500) => { const s = $('#status'); s.textContent = msg; s.classList.remove('hide'); clearTimeout(status.t); if (ms) status.t = setTimeout(()=>s.classList.add('hide'), ms); };
+
+const pdfjsLib = await import('./lib/pdf.js');
+globalThis.pdfjsLib = pdfjsLib;
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./lib/pdf.worker.js', import.meta.url).href;
+const V = await import('./lib/pdf_viewer.js');
+const { AnnotationEditorType: ET, AnnotationEditorParamsType: EP } = pdfjsLib;
+
+// Fonts and character maps for any PDF (Asian scripts, standard fonts), loaded only when a file needs them
+const bundles = {};
+const bundle = n => bundles[n] ||= fetch(new URL('./lib/' + n, import.meta.url)).then(r => r.json());
+const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+class CMaps { async fetch({ name }) { const m = await bundle('cmaps.json'); if (!m[name + '.bcmap']) throw new Error('No character map ' + name); return { cMapData: b64(m[name + '.bcmap']), isCompressed: true }; } }
+class StdFonts { async fetch({ filename }) { const m = await bundle('fonts.json'); if (!m[filename]) throw new Error('No font ' + filename); return b64(m[filename]); } }
+
+const l10n = { getLanguage: () => 'en-GB', getDirection: () => 'ltr', get: async () => '', translate: async () => {}, translateOnce: async () => {}, pause(){}, resume(){}, destroy: async () => {} };
+const eventBus = new V.EventBus();
+const linkService = new V.PDFLinkService({ eventBus, externalLinkTarget: 2 });
+const findController = new V.PDFFindController({ eventBus, linkService });
+const container = $('#viewerContainer');
+const viewer = new V.PDFViewer({ container, viewer: $('#viewer'), eventBus, linkService, findController, l10n,
+  annotationEditorMode: ET.NONE, annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS, removePageBorders: true, maxCanvasPixels: 2 ** 25 });
+linkService.setViewer(viewer);
+
+let doc = null, fileName = 'welcome.pdf', thumbsDone = new Set(), io = null;
+
+async function openData(data, name){
+  let pw;
+  for (let tries = 0; ; tries++) {
+    const task = pdfjsLib.getDocument({ data: data.slice(0), password: pw, CMapReaderFactory: CMaps, StandardFontDataFactory: StdFonts, useSystemFonts: true, isEvalSupported: false, enableXfa: true });
+    try { const d = await task.promise; await show(d, name); return; }
+    catch (e) {
+      if (e && e.name === 'PasswordException') { pw = await askPassword(tries > 0); if (pw === null) { status('Opening cancelled.'); return; } continue; }
+      status(e && e.name === 'InvalidPDFException' ? `"${name}" is not a PDF or is damaged, so Termite can't open it.` : `Couldn't open "${name}": ${e && e.message || e}`, 8000); return;
+    }
+  }
+}
+function askPassword(wrong){
+  return new Promise(res => {
+    const d = $('#dlg-pw'); $('#pw').value = ''; $('#pw-err').textContent = wrong ? 'That password is not right. Try again.' : '';
+    const done = v => { d.close(); $('#pw-form').onsubmit = null; $('#pw-cancel').onclick = null; res(v); };
+    $('#pw-form').onsubmit = e => { e.preventDefault(); done($('#pw').value); };
+    $('#pw-cancel').onclick = () => done(null);
+    d.oncancel = () => done(null);
+    d.showModal(); $('#pw').focus();
+  });
+}
+async function show(d, name){
+  if (doc) { try { await doc.destroy(); } catch(e){} }
+  doc = d; fileName = name; $('#fname').textContent = name; document.title = name.replace(/\.pdf$/i,'') + ' · Termite';
+  viewer.setDocument(d); linkService.setDocument(d, null); findController.setDocument?.(d);
+  $('#of').textContent = 'of ' + d.numPages; $('#pg').max = d.numPages;
+  setTool('none'); buildThumbs(); buildOutline(); $('#count').textContent = '';
+  if ($('#q').value.trim()) runFind(false);
+}
+eventBus.on('pagesinit', () => { viewer.currentScaleValue = window.innerWidth < 760 ? 'page-width' : 'auto'; });
+eventBus.on('pagechanging', e => { $('#pg').value = e.pageNumber; markThumb(e.pageNumber); $('#b-prev').disabled = e.pageNumber <= 1; $('#b-next').disabled = e.pageNumber >= (doc?.numPages || 1); });
+eventBus.on('scalechanging', e => { const v = String(e.presetValue || e.scale); const z = $('#zoom');
+  if ([...z.options].some(o => o.value === v && !o.hidden)) z.value = v; else { const c = z.querySelector('[value=custom]'); c.textContent = Math.round(e.scale * 100) + '%'; c.hidden = false; z.value = 'custom'; } });
+
+/* ---------- open files ---------- */
+$('#b-open').onclick = () => $('#file').click();
+$('#file').onchange = async e => { const f = e.target.files[0]; if (f) openFile(f); e.target.value = ''; };
+async function openFile(f){ if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') { termite.writer ? termite.writer.openFile(f) : status('The Word editor is still loading. Try again in a moment.'); return; }
+  setMode('pdf'); status('Opening ' + f.name + '…', 0); const buf = new Uint8Array(await f.arrayBuffer()); await openData(buf, f.name); if (doc) $('#status').classList.add('hide'); }
+let dragDepth = 0;
+addEventListener('dragenter', e => { if ([...e.dataTransfer.types].includes('Files')) { dragDepth++; $('#drop').classList.remove('hide'); } });
+addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('#drop').classList.add('hide'); } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); dragDepth = 0; $('#drop').classList.add('hide'); const f = [...e.dataTransfer.files].find(f => /pdf$/i.test(f.type) || /\.(pdf|docx|doc|txt|md|html?)$/i.test(f.name)); if (f) openFile(f); else status('Termite opens PDF and Word (.docx) files.'); });
+
+/* ---------- pages and zoom ---------- */
+const go = n => { if (doc) viewer.currentPageNumber = Math.min(Math.max(1, n), doc.numPages); };
+$('#b-prev').onclick = () => go(viewer.currentPageNumber - 1);
+$('#b-next').onclick = () => go(viewer.currentPageNumber + 1);
+$('#pg').onchange = e => { const n = parseInt(e.target.value, 10); if (n) go(n); else e.target.value = viewer.currentPageNumber; };
+$('#pg').onkeydown = e => { if (e.key === 'Enter') e.target.blur(); };
+$('#zoom').onchange = e => { if (e.target.value !== 'custom') viewer.currentScaleValue = e.target.value; };
+const zoomBy = f => { viewer.currentScale = Math.min(10, Math.max(0.1, +(viewer.currentScale * f).toFixed(3))); };
+$('#b-zin').onclick = () => zoomBy(1.2);
+$('#b-zout').onclick = () => zoomBy(1 / 1.2);
+$('#b-rot').onclick = () => { viewer.pagesRotation = (viewer.pagesRotation + 90) % 360; thumbsDone.clear(); buildThumbs(); };
+$('#b-scroll').onclick = e => { const on = e.currentTarget.getAttribute('aria-pressed') !== 'true'; e.currentTarget.setAttribute('aria-pressed', on); viewer.scrollMode = on ? V.ScrollMode.PAGE : V.ScrollMode.VERTICAL; };
+$('#b-dim').onclick = e => { const on = e.currentTarget.getAttribute('aria-pressed') !== 'true'; e.currentTarget.setAttribute('aria-pressed', on); container.classList.toggle('dim', on); };
+container.addEventListener('wheel', e => { if (e.ctrlKey) { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1); } }, { passive: false });
+
+/* ---------- sidebar ---------- */
+$('#b-side').onclick = e => { const on = e.currentTarget.getAttribute('aria-pressed') !== 'true'; e.currentTarget.setAttribute('aria-pressed', on); $('#side').classList.toggle('hide', !on); };
+if (innerWidth < 760) $('#b-side').click();
+const tab = which => { const p = which === 'pages'; $('#tab-pages').setAttribute('aria-selected', p); $('#tab-marks').setAttribute('aria-selected', !p); $('#pages').classList.toggle('hide', !p); $('#marks').classList.toggle('hide', p); };
+$('#tab-pages').onclick = () => tab('pages'); $('#tab-marks').onclick = () => tab('marks');
+
+function buildThumbs(){
+  const list = $('#pages'); list.innerHTML = ''; io?.disconnect(); thumbsDone.clear();
+  io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting) drawThumb(+en.target.dataset.p, en.target); }), { root: list, rootMargin: '300px' });
+  for (let i = 1; i <= doc.numPages; i++) {
+    const b = document.createElement('button'); b.className = 'thumb'; b.dataset.p = i; b.setAttribute('aria-label', 'Page ' + i);
+    b.innerHTML = `<div class="ph"></div><span>${i}</span>`; b.onclick = () => { go(i); if (innerWidth < 760) $('#b-side').click(); };
+    list.append(b); io.observe(b);
+  }
+  markThumb(viewer.currentPageNumber || 1);
+}
+async function drawThumb(n, el){
+  if (thumbsDone.has(n) || !doc) return; thumbsDone.add(n);
+  const d = doc, page = await d.getPage(n); if (d !== doc) return;
+  const vp0 = page.getViewport({ scale: 1, rotation: (page.rotate + viewer.pagesRotation) % 360 }), s = 150 / vp0.width, vp = page.getViewport({ scale: s * 2, rotation: vp0.rotation });
+  const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height; c.style.width = vp.width / 2 + 'px';
+  await page.render({ canvasContext: c.getContext('2d'), viewport: vp, annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }).promise.catch(()=>{});
+  el.querySelector('.ph, canvas')?.replaceWith(c);
+}
+function markThumb(n){ document.querySelectorAll('.thumb').forEach(t => t.setAttribute('aria-current', String(+t.dataset.p === n))); const t = document.querySelector(`.thumb[data-p="${n}"]`); if (t && !$('#pages').classList.contains('hide')) t.scrollIntoView({ block: 'nearest' }); }
+async function buildOutline(){
+  const box = $('#marks'), d = doc; box.innerHTML = '';
+  const ol = await d.getOutline().catch(() => null); if (d !== doc) return;
+  if (!ol || !ol.length) { box.innerHTML = '<p class="empty">This PDF has no bookmarks. Use Pages to move around.</p>'; return; }
+  const make = items => { const ul = document.createElement('ul'); for (const it of items) { const li = document.createElement('li'), b = document.createElement('button');
+    b.textContent = it.title || '(untitled)'; if (it.bold) b.style.fontWeight = 600; if (it.italic) b.style.fontStyle = 'italic';
+    b.onclick = () => { if (it.dest) linkService.goToDestination(it.dest); else if (it.url) window.open(it.url, '_blank', 'noopener'); };
+    li.append(b); if (it.items?.length) li.append(make(it.items)); ul.append(li); } return ul; };
+  const tree = make(ol); tree.className = 'outline'; box.append(tree);
+}
+
+/* ---------- find ---------- */
+function runFind(again, back = false){
+  const query = $('#q').value; if (!query.trim()) { eventBus.dispatch('find', { source: null, type: '', query: '', highlightAll: false }); $('#count').textContent = ''; return; }
+  eventBus.dispatch('find', { source: null, type: again ? 'again' : '', query, caseSensitive: false, entireWord: false, highlightAll: true, findPrevious: back, matchDiacritics: false });
+}
+let ft; $('#q').addEventListener('input', () => { clearTimeout(ft); ft = setTimeout(() => runFind(false), 250); });
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runFind(true, e.shiftKey); } if (e.key === 'Escape') { $('#q').value = ''; runFind(false); container.focus(); } });
+$('#f-next').onclick = () => runFind(true); $('#f-prev').onclick = () => runFind(true, true);
+eventBus.on('updatefindmatchescount', ({ matchesCount: m }) => { $('#count').textContent = m.total ? `${m.current} of ${m.total}` : ($('#q').value.trim() ? 'No matches' : ''); });
+eventBus.on('updatefindcontrolstate', ({ state, matchesCount: m }) => { if (state === 1 && !m?.total) $('#count').textContent = 'No matches'; });
+
+/* ---------- markup tools ---------- */
+const TOOLS = { none: ET.NONE, hl: ET.HIGHLIGHT, ink: ET.INK, text: ET.FREETEXT };
+function setTool(k){
+  for (const t of Object.keys(TOOLS)) $('#t-' + t).setAttribute('aria-pressed', String(t === k));
+  try { viewer.annotationEditorMode = { mode: TOOLS[k] }; } catch (e) { if (k !== 'none') status('That tool is not ready yet; try again in a moment.'); }
+  if (k !== 'none') applyColour();
+}
+for (const k of Object.keys(TOOLS)) $('#t-' + k).onclick = () => setTool(k);
+function applyColour(){ const v = $('#colour').value;
+  eventBus.dispatch('switchannotationeditorparams', { source: null, type: EP.INK_COLOR, value: v });
+  eventBus.dispatch('switchannotationeditorparams', { source: null, type: EP.FREETEXT_COLOR, value: v }); }
+$('#colour').oninput = applyColour;
+
+/* ---------- save a copy ---------- */
+let downloads = null;
+try { window.claude?.use?.('downloads').then(d => { downloads = d; }, () => {}); } catch(e) {}
+async function currentBytes(){ return doc.annotationStorage.size ? await doc.saveDocument() : await doc.getData(); }
+const saveName = suffix => fileName.replace(/\.pdf$/i, '') + (suffix || '') + '.pdf';
+async function offerSave(bytes, name, mime){ return save(new Blob([bytes], { type: mime || 'application/pdf' }), name); }
+$('#b-save').onclick = async () => {
+  if (!doc) return;
+  status('Preparing your copy…', 0);
+  try {
+    const name = saveName(doc.annotationStorage.size ? ' (marked up)' : '');
+    if (await offerSave(await currentBytes(), name)) status('Saved "' + name + '".'); else {}
+  } catch (e) { status(e && e.code === 'declined' ? 'Save cancelled.' : 'Couldn\'t save the copy: ' + (e && e.message || e), 6000); }
+};
+
+/* ---------- new blank document (type your own) ---------- */
+$('#b-new').onclick = async () => { await openData(blankPdf(), 'Untitled.pdf'); setTool('text'); status('Blank page ready — the Text tool is on, click where you want to type. Save or Hide it when you\'re done.', 7000); };
+
+/* ---------- share: save, then send by WhatsApp, email or Bluetooth ---------- */
+const iOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const inClaude = !!window.claude, android = !!window.TermiteAndroid, win = /Windows/.test(navigator.userAgent), desktop = !iOS && !/Android/.test(navigator.userAgent);
+const toB64 = async blob => { const u8 = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const where = desktop ? 'your Downloads folder' : iOS ? 'the Files app (On My iPhone › Downloads)' : 'your Downloads folder (Files or My Files app)';
+const HELP = {
+  wa: `WhatsApp is opening with a message. In the chat, tap ${iOS ? '+' : 'the paperclip'} › Document, then pick the file you saved from ${where}. Nothing opened? Open WhatsApp yourself and attach it the same way.`,
+  mail: `Your email app is opening with the subject filled in. Tap the paperclip, pick the saved file from ${where}, add an address and send. Nothing opened? Start a new email and attach the file the same way.`,
+  bt: desktop ? (win ? 'In File Explorer, open Downloads, right-click the saved file and choose Send to › Bluetooth device (on Windows 11: Show more options first). Pick the phone or computer, and accept it on the other side.' : 'Open your Bluetooth settings and choose Send Files (or right-click the saved file › Send to › Bluetooth), then pick the device and accept it on the other side.') : iOS ? 'iPhones can\'t send files over Bluetooth to other phones. Use AirDrop instead: open the Files app › Downloads, touch and hold the file, tap Share › AirDrop.'
+          : 'Turn Bluetooth on for both phones. Open Files (or My Files) › Downloads, press and hold the saved file, tap Share › Bluetooth and choose the other device. The other phone has to accept it.'
+};
+let shareJob = null;
+async function share(job){
+  shareJob = job; const keys = Object.keys(job.make);
+  if (android && keys.length === 1) { status('Preparing…', 0); try { const { blob, filename } = await job.make[keys[0]].build(); TermiteAndroid.share(await toB64(blob), filename, blob.type || 'application/octet-stream'); $('#status').classList.add('hide'); } catch (e) { status('Couldn\'t prepare the file: ' + (e.message || e), 6000); } return; }
+  $('#sh-note').textContent = inClaude ? 'Termite runs inside Claude, which can\'t pass a file straight to another app. So: save it first, then pick how to send the saved file.' : android ? 'Pick a format, then tap Send to choose WhatsApp, Gmail, Bluetooth or any other app.' : 'Save the file first, then pick how to send the saved file.';
+  $('#sh-save').dataset.label = android ? 'Send…' : '1. Save the file to this device';
+  $('#sh-h').textContent = 'Send "' + job.name + '"';
+  const fmt = $('#sh-fmt'); fmt.innerHTML = ''; fmt.classList.toggle('hide', keys.length < 2);
+  keys.forEach((k, i) => { const l = document.createElement('label'); l.innerHTML = `<input type="radio" name="shfmt" value="${k}"${i ? '' : ' checked'}> `; l.append(job.make[k].label); fmt.append(l); });
+  const msg = `Sending you "${job.name}" (made with Termite). I've attached the file.`;
+  $('#sh-wa').href = 'https://wa.me/?text=' + encodeURIComponent(msg);
+  $('#sh-mail').href = 'mailto:?subject=' + encodeURIComponent(job.name) + '&body=' + encodeURIComponent('Hello,\n\n' + msg + '\n');
+  $('#sh-help').textContent = ''; $('#sh-bt').setAttribute('aria-pressed', 'false');
+  $('#sh-copy').classList.toggle('hide', !job.text);
+  $('#sh-save').textContent = $('#sh-save').dataset.label; $('#dlg-share').showModal();
+}
+$('#sh-save').onclick = async () => {
+  const k = (document.querySelector('input[name=shfmt]:checked') || {}).value || Object.keys(shareJob.make)[0];
+  $('#sh-save').textContent = 'Preparing…';
+  try {
+    const { blob, filename } = await shareJob.make[k].build();
+    const file = new File([blob], filename, { type: blob.type });
+    if (android) { TermiteAndroid.share(await toB64(blob), filename, blob.type || 'application/octet-stream'); $('#dlg-share').close(); return; }
+    if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: filename }); $('#dlg-share').close(); status('Handed to your phone\'s share menu.'); return; } catch (e) { if (e.name === 'AbortError') { $('#sh-save').textContent = $('#sh-save').dataset.label; return; } } }
+    if (await save(blob, filename)) { $('#sh-save').textContent = '✓ Saved "' + filename + '"'; $('#sh-help').textContent = 'Saved. Now tap WhatsApp, Email or Bluetooth.'; }
+    else $('#sh-save').textContent = $('#sh-save').dataset.label;
+  } catch (e) { $('#sh-save').textContent = $('#sh-save').dataset.label; $('#sh-help').textContent = e && e.code === 'declined' ? 'Save cancelled.' : 'Couldn\'t prepare the file: ' + (e.message || e); }
+};
+$('#sh-wa').addEventListener('click', () => { $('#sh-help').textContent = HELP.wa; });
+$('#sh-mail').addEventListener('click', () => { $('#sh-help').textContent = HELP.mail; });
+$('#sh-bt').onclick = () => { $('#sh-bt').setAttribute('aria-pressed', 'true'); $('#sh-help').textContent = HELP.bt; };
+$('#sh-copy').onclick = async () => { try { await navigator.clipboard.writeText(shareJob.text); $('#sh-help').textContent = 'Text copied. You can paste it straight into a WhatsApp chat or an email.'; } catch (e) { $('#sh-help').textContent = 'This view blocked copying. Select the text in the document and copy it yourself.'; } };
+$('#sh-close').onclick = () => $('#dlg-share').close();
+$('#b-share').onclick = () => { if (!doc) return; const n = saveName(doc.annotationStorage.size ? ' (marked up)' : '');
+  share({ name: n.replace(/\.pdf$/i, ''), make: { pdf: { label: 'PDF', build: async () => ({ blob: new Blob([await currentBytes()], { type: 'application/pdf' }), filename: n }) } } }); };
+
+/* ---------- PDF and Word modes ---------- */
+function setMode(m){
+  const w = m === 'write';
+  $('#m-pdf').setAttribute('aria-selected', String(!w)); $('#m-write').setAttribute('aria-selected', String(w));
+  $('#pdfbar').classList.toggle('hide', w); $('#wbar').classList.toggle('hide', !w);
+  $('#stage').classList.toggle('hide', w); $('#wstage').classList.toggle('hide', !w);
+  $('#side').classList.toggle('hide', w || $('#b-side').getAttribute('aria-pressed') !== 'true');
+  $('#dlg-find').close?.();
+  document.title = w ? 'Word · Termite' : fileName.replace(/\.pdf$/i, '') + ' · Termite';
+}
+$('#m-pdf').onclick = () => setMode('pdf'); $('#m-write').onclick = () => setMode('write');
+$('#b-toword').onclick = () => { if (doc) termite.writer?.fromPdf(doc, fileName).catch(e => status('Couldn\'t convert: ' + (e.message || e), 7000)); };
+async function ask(msg, yes = 'OK'){ return new Promise(res => { const d = $('#dlg-ask'); $('#ask-msg').textContent = msg; $('#ask-yes').textContent = yes;
+  const done = v => { d.close(); res(v); }; $('#ask-yes').onclick = () => done(true); $('#ask-no').onclick = () => done(false); d.oncancel = () => done(false); d.showModal(); }); }
+async function save(blob, name){
+  if (android) { const r = TermiteAndroid.save(await toB64(blob), name, blob.type || 'application/octet-stream'); if (r.startsWith('ok')) { status('Saved "' + name + '" to ' + r.slice(3) + '.', 5000); return true; } status('Couldn\'t save: ' + r.replace(/^error:/, ''), 7000); return false; }
+  if (!inClaude) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); status('Saved "' + name + '".'); return true; }
+  if (!downloads) { status('Saving isn\'t available in this view. Open Termite from its own page to save or share files.', 7000); return false; }
+  try { await downloads.save({ filename: name, data: blob }); status('Saved "' + name + '".'); return true; } catch (e) { status(e && e.code === 'declined' ? 'Save cancelled.' : 'Couldn\'t save: ' + (e.message || e), 6000); return false; } }
+const termite = globalThis.termite = { status, share, save, ask, setMode, openPdfData: (u8, n) => openData(u8, n),
+  openBytes: (b64, n) => openFile(new File([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], n, { type: /\.pdf$/i.test(n) ? 'application/pdf' : '' })) };
+
+/* ---------- hide & reveal (steganography, with optional encryption) ---------- */
+const te = new TextEncoder(), tdv = new TextDecoder();
+const MAGIC = te.encode('TERMITE1');
+function joinBytes(arrs){ let n = 0; for (const a of arrs) n += a.length; const o = new Uint8Array(n); let p = 0; for (const a of arrs){ o.set(a, p); p += a.length; } return o; }
+function u64(n){ const b = new Uint8Array(8); let v = BigInt(n); for (let i = 7; i >= 0; i--){ b[i] = Number(v & 255n); v >>= 8n; } return b; }
+function ru64(b){ let v = 0n; for (const x of b) v = (v << 8n) | BigInt(x); return Number(v); }
+async function deriveKey(pass, salt){ const base = await crypto.subtle.importKey('raw', te.encode(pass), 'PBKDF2', false, ['deriveKey']); return crypto.subtle.deriveKey({ name:'PBKDF2', salt, iterations:150000, hash:'SHA-256' }, base, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']); }
+async function makeBlock(data, pass){
+  if (!pass) return { flags: 0, block: data };
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name:'AES-GCM', iv }, await deriveKey(pass, salt), data));
+  return { flags: 1, block: joinBytes([salt, iv, ct]) };
+}
+async function openBlock(flags, block, pass){
+  if (!(flags & 1)) return block;
+  if (!pass) throw new Error('This document is locked — enter its passphrase.');
+  const salt = block.slice(0,16), iv = block.slice(16,28), ct = block.slice(28);
+  try { return new Uint8Array(await crypto.subtle.decrypt({ name:'AES-GCM', iv }, await deriveKey(pass, salt), ct)); }
+  catch (e) { throw new Error('Wrong passphrase, or the file is damaged.'); }
+}
+// trailer method (pdf/png/wav/webm): carrier + block + len(8) + flags(1) + MAGIC(8)
+function appendTrailer(carrier, flags, block){ return joinBytes([carrier, block, u64(block.length), new Uint8Array([flags]), MAGIC]); }
+function readTrailer(bytes){
+  if (bytes.length < 17) return null;
+  for (let i = 0; i < 8; i++) if (bytes[bytes.length - 8 + i] !== MAGIC[i]) return null;
+  const flags = bytes[bytes.length - 9], len = ru64(bytes.slice(bytes.length - 17, bytes.length - 9)), start = bytes.length - 17 - len;
+  if (start < 0) return null;
+  return { flags, block: bytes.slice(start, start + len) };
+}
+// zero-width method (text): cover text + invisible bits of flags(1) + block
+const ZW0 = '​', ZW1 = '‌';
+function zwEncode(flags, block){ const data = joinBytes([new Uint8Array([flags]), block]); let s = ''; for (const byte of data) for (let i = 7; i >= 0; i--) s += ((byte >> i) & 1) ? ZW1 : ZW0; return s; }
+function zwDecode(text){ let bits = ''; for (const ch of text){ if (ch === ZW0) bits += '0'; else if (ch === ZW1) bits += '1'; } bits = bits.slice(0, bits.length - (bits.length % 8)); if (!bits) return null; const out = new Uint8Array(bits.length / 8); for (let i = 0; i < out.length; i++) out[i] = parseInt(bits.substr(i*8, 8), 2); return { flags: out[0], block: out.slice(1) }; }
+// carriers
+function blankPdf(){
+  const objs = ["<</Type/Catalog/Pages 2 0 R>>","<</Type/Pages/Kids[3 0 R]/Count 1>>","<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<<>>>>"];
+  let pdf = "%PDF-1.4\n"; const off = [];
+  objs.forEach((o, i) => { off.push(pdf.length); pdf += (i+1) + " 0 obj\n" + o + "\nendobj\n"; });
+  const x = pdf.length; pdf += "xref\n0 " + (objs.length+1) + "\n0000000000 65535 f \n";
+  off.forEach(o => pdf += String(o).padStart(10,'0') + " 00000 n \n");
+  pdf += "trailer\n<</Size " + (objs.length+1) + "/Root 1 0 R>>\nstartxref\n" + x + "\n%%EOF";
+  return te.encode(pdf);
+}
+function pngCarrier(){ return new Promise(res => { const c = document.createElement('canvas'); c.width = 640; c.height = 400; const g = c.getContext('2d'); const grd = g.createLinearGradient(0,0,640,400); grd.addColorStop(0,'#1b2a3a'); grd.addColorStop(1,'#0d1520'); g.fillStyle = grd; g.fillRect(0,0,640,400); c.toBlob(async b => res(new Uint8Array(await b.arrayBuffer())), 'image/png'); }); }
+function wavCarrier(seconds = 3){ const sr = 8000, n = sr * seconds, pcm = new Int16Array(n); for (let i = 0; i < n; i++) pcm[i] = Math.round(2600 * Math.sin(2*Math.PI*220*i/sr) * Math.exp(-i/n*1.4)); const hdr = new ArrayBuffer(44), v = new DataView(hdr), ws = (o,s) => { for (let i = 0; i < s.length; i++) v.setUint8(o+i, s.charCodeAt(i)); }, by = pcm.length*2; ws(0,'RIFF'); v.setUint32(4,36+by,true); ws(8,'WAVE'); ws(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); ws(36,'data'); v.setUint32(40,by,true); return joinBytes([new Uint8Array(hdr), new Uint8Array(pcm.buffer)]); }
+async function webmCarrier(){
+  if (!window.MediaRecorder) throw new Error('This browser can\'t make a video carrier — choose another carrier type.');
+  const c = document.createElement('canvas'); c.width = 320; c.height = 240; const g = c.getContext('2d');
+  const types = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']; const mt = types.find(t => MediaRecorder.isTypeSupported(t));
+  const rec = new MediaRecorder(c.captureStream(12), mt ? { mimeType: mt } : undefined), chunks = [];
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data); const stopped = new Promise(r => rec.onstop = r); rec.start();
+  const t0 = performance.now(); await new Promise(r => { (function frame(){ const t = (performance.now()-t0)/1000; g.fillStyle = '#0d1520'; g.fillRect(0,0,320,240); g.fillStyle = '#f2a35a'; g.beginPath(); g.arc(160 + 80*Math.sin(t*2), 120 + 60*Math.cos(t*3), 14, 0, 7); g.fill(); t < 1.3 ? requestAnimationFrame(frame) : r(); })(); });
+  rec.stop(); await stopped; return new Uint8Array(await new Blob(chunks, { type: mt || 'video/webm' }).arrayBuffer());
+}
+$('#b-hide').onclick = () => { if (!doc) return; $('#hi-err').textContent = ''; $('#hi-coverwrap').classList.toggle('hide', $('#hi-type').value !== 'txt'); $('#dlg-hide').showModal(); };
+$('#hi-type').onchange = e => $('#hi-coverwrap').classList.toggle('hide', e.target.value !== 'txt');
+$('#hi-cancel').onclick = () => $('#dlg-hide').close();
+$('#hi-go').onclick = async () => {
+  const type = $('#hi-type').value, pass = $('#hi-pass').value; $('#hi-err').textContent = ''; status('Building the carrier…', 0);
+  try {
+    const { flags, block } = await makeBlock(await currentBytes(), pass);
+    let out, name, mime;
+    if (type === 'txt') { out = te.encode(($('#hi-cover').value || '') + zwEncode(flags, block)); name = 'notes.txt'; mime = 'text/plain'; }
+    else if (type === 'pdf') { out = appendTrailer(blankPdf(), flags, block); name = 'blank.pdf'; mime = 'application/pdf'; }
+    else if (type === 'png') { out = appendTrailer(await pngCarrier(), flags, block); name = 'image.png'; mime = 'image/png'; }
+    else if (type === 'wav') { out = appendTrailer(wavCarrier(), flags, block); name = 'audio.wav'; mime = 'audio/wav'; }
+    else { out = appendTrailer(await webmCarrier(), flags, block); name = 'clip.webm'; mime = 'video/webm'; }
+    $('#dlg-hide').close();
+    if (await offerSave(out, name, mime)) status('Hidden inside "' + name + '" (' + Math.round(out.length/1024) + ' KB)' + (pass ? ' and locked.' : '.'), 7000); else $('#status').classList.add('hide');
+  } catch (e) { $('#hi-err').textContent = (e && e.message) || String(e); $('#status').classList.add('hide'); }
+};
+$('#b-reveal').onclick = () => { $('#rv-err').textContent = ''; $('#rv-file').value = ''; $('#rv-pass').value = ''; $('#dlg-reveal').showModal(); };
+$('#rv-cancel').onclick = () => $('#dlg-reveal').close();
+$('#rv-go').onclick = async () => {
+  const f = $('#rv-file').files[0]; if (!f) { $('#rv-err').textContent = 'Choose a carrier file first.'; return; }
+  $('#rv-err').textContent = '';
+  try {
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    let found = readTrailer(bytes);
+    if (!found) { try { found = zwDecode(tdv.decode(bytes)); } catch (e) {} }
+    if (!found) { $('#rv-err').textContent = 'No hidden document found in that file.'; return; }
+    const data = await openBlock(found.flags, found.block, $('#rv-pass').value);
+    if (!(data[0] === 0x25 && data[1] === 0x50 && data[2] === 0x44 && data[3] === 0x46)) { $('#rv-err').textContent = 'Recovered data isn\'t a PDF — wrong passphrase, or not a Termite carrier.'; return; }
+    $('#dlg-reveal').close(); await openData(data, 'revealed.pdf'); status('Revealed the hidden document.');
+  } catch (e) { $('#rv-err').textContent = (e && e.message) || String(e); }
+};
+globalThis.Termite = { blankPdf, appendTrailer, readTrailer, zwEncode, zwDecode, makeBlock, openBlock };
+
+/* ---------- properties ---------- */
+$('#b-props').onclick = async () => {
+  if (!doc) return;
+  const { info, metadata } = await doc.getMetadata().catch(() => ({ info: {} }));
+  const p1 = await doc.getPage(1), vp = p1.getViewport({ scale: 1 });
+  const mm = x => Math.round(x / 72 * 25.4), date = s => { const d = pdfjsLib.PDFDateString.toDateObject(s); return d ? d.toLocaleString() : ''; };
+  const rows = [['File', fileName], ['Title', metadata?.get('dc:title') || info.Title], ['Author', info.Author], ['Subject', info.Subject], ['Keywords', info.Keywords],
+    ['Created', date(info.CreationDate)], ['Modified', date(info.ModDate)], ['Made with', info.Creator], ['PDF producer', info.Producer], ['PDF version', info.PDFFormatVersion],
+    ['Pages', doc.numPages], ['Page size', `${mm(vp.width)} × ${mm(vp.height)} mm`], ['Forms', info.IsAcroFormPresent ? 'Yes, fillable' : 'No'], ['Tagged for accessibility', (await doc.getMarkInfo().catch(() => null))?.Marked ? 'Yes' : 'No']];
+  $('#props').innerHTML = ''; for (const [k, v] of rows) { if (v === undefined || v === '' || v === null) continue; const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = k; dd.textContent = v; $('#props').append(dt, dd); }
+  $('#dlg-props').showModal();
+};
+$('#pr-close').onclick = () => $('#dlg-props').close();
+
+/* ---------- keyboard ---------- */
+addEventListener('keydown', e => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable, mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); $('#b-open').click(); return; }
+  if ($('#m-write').getAttribute('aria-selected') === 'true') return;
+  if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); $('#q').focus(); $('#q').select(); return; }
+  if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoomBy(1.2); return; }
+  if (mod && e.key === '-') { e.preventDefault(); zoomBy(1 / 1.2); return; }
+  if (mod && e.key === '0') { e.preventDefault(); viewer.currentScaleValue = 'page-width'; return; }
+  if (typing || mod || e.altKey) return;
+  if (e.key === 'Escape') setTool('none');
+  else if (e.key === 'PageDown' && viewer.scrollMode === V.ScrollMode.PAGE) { e.preventDefault(); go(viewer.currentPageNumber + 1); }
+  else if (e.key === 'PageUp' && viewer.scrollMode === V.ScrollMode.PAGE) { e.preventDefault(); go(viewer.currentPageNumber - 1); }
+  else if (e.key === 'Home') { e.preventDefault(); go(1); } else if (e.key === 'End') { e.preventDefault(); go(doc?.numPages || 1); }
+  else if (e.key.toLowerCase() === 'r') $('#b-rot').click();
+  else if (e.key.toLowerCase() === 'h') setTool('hl'); else if (e.key.toLowerCase() === 'p') setTool('ink'); else if (e.key.toLowerCase() === 't') setTool('text');
+});
+
+/* ---------- start with the guide ---------- */
+const sample = new Uint8Array(await (await fetch(new URL('./welcome.pdf', import.meta.url))).arrayBuffer());
+await openData(sample, 'welcome.pdf');
+await import('./writer.js');
+if (location.hash === '#word') setMode('write');
+</script>
+</body>
+</html>

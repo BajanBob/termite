@@ -1,0 +1,33 @@
+{
+  "name": "termite",
+  "productName": "Termite",
+  "version": "1.0.0",
+  "description": "Termite: read, mark up and fill PDFs, and write Word documents",
+  "main": "main.js",
+  "author": { "name": "BajanBob", "email": "bajanbob@users.noreply.github.com" },
+  "homepage": "https://github.com/BajanBob/Termite",
+  "license": "Apache-2.0",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:linux": "electron-builder --linux --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "org.termite.app",
+    "productName": "Termite",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.js", "web/**/*"],
+    "fileAssociations": [
+      { "ext": "pdf", "name": "PDF document", "role": "Viewer", "mimeType": "application/pdf" },
+      { "ext": "docx", "name": "Word document", "role": "Editor", "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }
+    ],
+    "win": { "target": ["nsis", "portable"], "icon": "build/icon.png" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "artifactName": "Termite-Setup-${version}.${ext}", "shortcutName": "Termite" },
+    "portable": { "artifactName": "Termite-${version}-portable.exe" },
+    "linux": { "target": ["AppImage", "deb"], "category": "Office", "icon": "build/icon.png", "maintainer": "BajanBob <bajanbob@users.noreply.github.com>", "artifactName": "Termite-${version}-${arch}.${ext}" }
+  }
+}
