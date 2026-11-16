@@ -300,4 +300,4 @@ let draft = null; try { draft = JSON.parse(localStorage.getItem('termite.draft')
 if (draft && draft.html) { load(draft.html, draft.name || 'Untitled.docx'); $('#w-saved').textContent = 'Your last draft is back'; }
 else load('<h1 class="title">Untitled document</h1><p>Start typing here. Use the toolbar above for styles, lists, tables and pictures, then Save .docx, make a PDF, or Share.</p>', 'Untitled.docx');
 
-T.writer = { openFile, fromPdf, docxBlob, pdfBlob };
+T.writer = { openFile, fromPdf, docxBlob, pdfBlob, load };

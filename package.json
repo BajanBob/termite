@@ -1,10 +1,10 @@
 {
   "name": "termite",
   "productName": "Termite",
-  "version": "1.0.0",
-  "description": "Termite: read, mark up and fill PDFs, and write Word documents",
+  "version": "1.1.0",
+  "description": "Termite: PDFs, Word documents and the Kiosk studio of AI agents",
   "main": "main.js",
-  "author": { "name": "BajanBob", "email": "bajanbob@users.noreply.github.com" },
+  "author": { "name": "Kammie Holder, Ai Innovation Studio", "email": "bajanbob@users.noreply.github.com" },
   "homepage": "https://github.com/BajanBob/Termite",
   "license": "Apache-2.0",
   "scripts": {
@@ -20,7 +20,7 @@
     "appId": "org.termite.app",
     "productName": "Termite",
     "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["main.js", "web/**/*"],
+    "files": ["main.js", "preload.js", "web/**/*"],
     "fileAssociations": [
       { "ext": "pdf", "name": "PDF document", "role": "Viewer", "mimeType": "application/pdf" },
       { "ext": "docx", "name": "Word document", "role": "Editor", "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }

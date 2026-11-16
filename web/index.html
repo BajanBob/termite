@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="lib/pdf_viewer.css">
+<link rel="stylesheet" href="kiosk/kiosk.css">
 <style>
 /* Layout idea: a workbench. Slim toolbar on top, a drawer for pages and bookmarks on the left, the document on a quiet desk in the middle. */
 :root{
@@ -91,6 +92,11 @@ dialog label input[type=checkbox],dialog label input[type=radio]{display:inline-
 .fmt label{margin:0;color:var(--ink)}
 
 .contents{display:contents}
+.more-wrap{position:relative}
+.more-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:50;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;min-width:220px;display:flex;flex-direction:column}
+.more-menu[hidden]{display:none}
+.more-menu .tb{justify-content:flex-start;width:100%;height:36px;padding:0 10px}
+.kstage{flex:1;display:flex;min-width:0;min-height:0}
 .modes{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .modes button{border:0;background:var(--desk);padding:6px 14px;font-weight:600;color:var(--muted)}
 .modes button[aria-selected="true"]{background:var(--amber);color:var(--on-amber)}
@@ -160,6 +166,7 @@ dialog label input[type=checkbox],dialog label input[type=radio]{display:inline-
   <div class="modes" role="tablist" aria-label="Mode">
     <button role="tab" id="m-pdf" aria-selected="true">PDF</button>
     <button role="tab" id="m-write" aria-selected="false">Word</button>
+    <button role="tab" id="m-kiosk" aria-selected="false">Kiosk</button>
   </div>
   <button class="tb primary" id="b-open" title="Open a PDF or Word file (Ctrl+O)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="lbl">Open</span></button>
   <input type="file" id="file" accept="application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.doc,.txt,.md,.html,.htm" class="hide">
@@ -197,14 +204,14 @@ dialog label input[type=checkbox],dialog label input[type=radio]{display:inline-
 
   <button class="tb" id="b-save" title="Save a copy with your form entries and markings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg><span class="lbl">Save copy</span></button>
   <button class="tb" id="b-toword" title="Turn this PDF into an editable Word document"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13l1.5 5 2.5-4 2.5 4L16 13"/></svg><span class="lbl">Edit as Word</span></button>
-  <button class="tb" id="b-props" title="Document properties" aria-label="Document properties"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h0"/></svg></button>
-  <button class="tb" id="b-dim" aria-pressed="false" title="Night reading (dark pages)" aria-label="Night reading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg></button>
-
-  <div class="grp" role="group" aria-label="Share and privacy">
-    <button class="tb" id="b-share" title="Send by WhatsApp, email or Bluetooth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg><span class="lbl">Share</span></button>
-    <button class="tb" id="b-hide" title="Hide this document inside an ordinary-looking file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><path d="M4 4l16 16"/></svg><span class="lbl">Hide</span></button>
-    <button class="tb" id="b-reveal" title="Reveal a document hidden in a carrier file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span class="lbl">Reveal</span></button>
-  </div>
+  <button class="tb" id="b-share" title="Send by WhatsApp, email or Bluetooth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg><span class="lbl">Share</span></button>
+  <div class="more-wrap"><button class="tb" id="b-more" aria-haspopup="true" aria-expanded="false" title="More tools"><span class="lbl">More</span> ▾</button>
+    <div class="more-menu" id="more-menu" role="menu" hidden>
+      <button class="tb mi" id="b-props" title="Document properties" aria-label="Document properties"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h0"/></svg><span>Document properties</span></button>
+      <button class="tb mi" id="b-dim" aria-pressed="false" title="Night reading (dark pages)" aria-label="Night reading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg><span>Night reading</span></button>
+      <button class="tb mi" id="b-hide" title="Hide this document inside an ordinary-looking file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><path d="M4 4l16 16"/></svg><span>Hide inside a file</span></button>
+      <button class="tb mi" id="b-reveal" title="Reveal a document hidden in a carrier file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Reveal a hidden file</span></button>
+    </div></div>
 
   <div class="find" role="search">
     <input type="search" id="q" placeholder="Find in document" aria-label="Find in document">
@@ -279,6 +286,7 @@ dialog label input[type=checkbox],dialog label input[type=radio]{display:inline-
     <div class="paper" id="doc" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Document"></div>
     <div class="wfoot"><span id="w-count"></span><span id="w-saved"></span></div>
   </main>
+  <main class="kstage hide" id="kstage" aria-label="Kiosk"></main>
   <div class="status hide" id="status" role="status"></div>
 </div>
 <div id="printbay" aria-hidden="true"></div>
@@ -582,16 +590,21 @@ $('#b-share').onclick = () => { if (!doc) return; const n = saveName(doc.annotat
   share({ name: n.replace(/\.pdf$/i, ''), make: { pdf: { label: 'PDF', build: async () => ({ blob: new Blob([await currentBytes()], { type: 'application/pdf' }), filename: n }) } } }); };
 
 /* ---------- PDF and Word modes ---------- */
+let kioskLoaded = null;
 function setMode(m){
-  const w = m === 'write';
-  $('#m-pdf').setAttribute('aria-selected', String(!w)); $('#m-write').setAttribute('aria-selected', String(w));
-  $('#pdfbar').classList.toggle('hide', w); $('#wbar').classList.toggle('hide', !w);
-  $('#stage').classList.toggle('hide', w); $('#wstage').classList.toggle('hide', !w);
-  $('#side').classList.toggle('hide', w || $('#b-side').getAttribute('aria-pressed') !== 'true');
+  const w = m === 'write', k = m === 'kiosk', pdf = !w && !k;
+  $('#m-pdf').setAttribute('aria-selected', String(pdf)); $('#m-write').setAttribute('aria-selected', String(w)); $('#m-kiosk').setAttribute('aria-selected', String(k));
+  $('#pdfbar').classList.toggle('hide', !pdf); $('#wbar').classList.toggle('hide', !w); $('#b-open').classList.toggle('hide', k);
+  $('#stage').classList.toggle('hide', !pdf); $('#wstage').classList.toggle('hide', !w); $('#kstage').classList.toggle('hide', !k);
+  $('#side').classList.toggle('hide', !pdf || $('#b-side').getAttribute('aria-pressed') !== 'true');
   $('#dlg-find').close?.();
-  document.title = w ? 'Word · Termite' : fileName.replace(/\.pdf$/i, '') + ' · Termite';
+  document.title = k ? 'Kiosk · Termite' : w ? 'Word · Termite' : fileName.replace(/\.pdf$/i, '') + ' · Termite';
+  if (k && !kioskLoaded) { status('Opening Kiosk…', 0); kioskLoaded = import('./kiosk/kiosk.js').then(() => $('#status').classList.add('hide')).catch(e => { kioskLoaded = null; status('Kiosk couldn\'t load: ' + (e.message || e), 8000); }); }
 }
-$('#m-pdf').onclick = () => setMode('pdf'); $('#m-write').onclick = () => setMode('write');
+$('#m-pdf').onclick = () => setMode('pdf'); $('#m-write').onclick = () => setMode('write'); $('#m-kiosk').onclick = () => setMode('kiosk');
+$('#b-more').onclick = e => { e.stopPropagation(); const m = $('#more-menu'), open = m.hidden; m.hidden = !open; $('#b-more').setAttribute('aria-expanded', String(open)); };
+addEventListener('click', e => { if (!e.target.closest('.more-wrap')) { $('#more-menu').hidden = true; $('#b-more').setAttribute('aria-expanded', 'false'); } });
+$('#more-menu').addEventListener('click', e => { if (e.target.closest('button')) { $('#more-menu').hidden = true; $('#b-more').setAttribute('aria-expanded', 'false'); } });
 $('#b-toword').onclick = () => { if (doc) termite.writer?.fromPdf(doc, fileName).catch(e => status('Couldn\'t convert: ' + (e.message || e), 7000)); };
 async function ask(msg, yes = 'OK'){ return new Promise(res => { const d = $('#dlg-ask'); $('#ask-msg').textContent = msg; $('#ask-yes').textContent = yes;
   const done = v => { d.close(); res(v); }; $('#ask-yes').onclick = () => done(true); $('#ask-no').onclick = () => done(false); d.oncancel = () => done(false); d.showModal(); }); }
@@ -727,7 +740,8 @@ addEventListener('keydown', e => {
 const sample = new Uint8Array(await (await fetch(new URL('./welcome.pdf', import.meta.url))).arrayBuffer());
 await openData(sample, 'welcome.pdf');
 await import('./writer.js');
-if (location.hash === '#word') setMode('write');
+if (location.hash === '#word') setMode('write'); else if (location.hash === '#kiosk') setMode('kiosk');
+import('./hints.js').catch(() => {});
 </script>
 </body>
 </html>

@@ -75,15 +75,24 @@ public class MainActivity extends Activity {
             public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (pending != null) pending.onReceiveValue(null);
                 pending = cb;
-                boolean images = false;
-                for (String t : p.getAcceptTypes()) if (t != null && t.startsWith("image")) images = true;
+                java.util.ArrayList<String> media = new java.util.ArrayList<>();
+                boolean other = false;
+                for (String t : p.getAcceptTypes()) {
+                    if (t == null || t.trim().isEmpty()) continue;
+                    for (String one : t.split(",")) { one = one.trim();
+                        if (one.startsWith("image") || one.startsWith("video") || one.startsWith("audio")) media.add(one.contains("/") ? one : one + "/*"); else other = true; }
+                }
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType(images ? "image/*" : "*/*");
-                if (!images) i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/pdf",
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword",
-                        "text/plain", "text/html", "text/markdown", "application/octet-stream"});
-                try { startActivityForResult(Intent.createChooser(i, "Open with Termite"), PICK); }
+                i.setType("*/*");
+                if (!media.isEmpty() && !other) i.putExtra(Intent.EXTRA_MIME_TYPES, media.toArray(new String[0]));
+                else if (!other && media.isEmpty()) { /* any file */ }
+                else i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/pdf",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/msword",
+                        "text/plain", "text/csv", "text/comma-separated-values", "text/html", "text/markdown", "application/json", "application/octet-stream"});
+                if (p.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                try { startActivityForResult(Intent.createChooser(i, "Choose a file"), PICK); }
                 catch (Exception e) { pending = null; toast("No file picker found."); return false; }
                 return true;
             }
@@ -126,7 +135,11 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         if (req == PICK && pending != null) {
-            Uri[] r = (res == RESULT_OK && data != null && data.getData() != null) ? new Uri[]{data.getData()} : null;
+            Uri[] r = null;
+            if (res == RESULT_OK && data != null) {
+                if (data.getClipData() != null) { int n = data.getClipData().getItemCount(); r = new Uri[n]; for (int k = 0; k < n; k++) r[k] = data.getClipData().getItemAt(k).getUri(); }
+                else if (data.getData() != null) r = new Uri[]{data.getData()};
+            }
             pending.onReceiveValue(r);
             pending = null;
         }
@@ -143,7 +156,32 @@ public class MainActivity extends Activity {
         return s.isEmpty() ? "document" : s;
     }
 
+    private static final java.util.regex.Pattern AI_HOSTS = java.util.regex.Pattern.compile(
+            "^https://(api\\.anthropic\\.com|api\\.venice\\.ai|openrouter\\.ai|api\\.groq\\.com|generativelanguage\\.googleapis\\.com)/.*|^http://(localhost|127\\.0\\.0\\.1):11434/.*");
+
     class Bridge {
+        /** Kiosk's AI requests (Venice, Groq, Gemini, OpenRouter, Anthropic, Ollama). Answers via termiteNetDone(id, status, text). */
+        @JavascriptInterface
+        public void http(final int id, final String url, final String method, final String headersJson, final String body) {
+            new Thread(() -> {
+                int status = 0; String text;
+                try {
+                    if (!AI_HOSTS.matcher(url).matches()) throw new Exception("Termite only talks to known AI services.");
+                    java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                    c.setRequestMethod(method); c.setConnectTimeout(20000); c.setReadTimeout(180000);
+                    JSONObject h = new JSONObject(headersJson == null || headersJson.isEmpty() ? "{}" : headersJson);
+                    java.util.Iterator<String> it = h.keys(); while (it.hasNext()) { String k = it.next(); c.setRequestProperty(k, h.getString(k)); }
+                    if (!"GET".equals(method) && body != null && !body.isEmpty()) { c.setDoOutput(true); try (OutputStream o = c.getOutputStream()) { o.write(body.getBytes("UTF-8")); } }
+                    status = c.getResponseCode();
+                    InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream();
+                    ByteArrayOutputStream out = new ByteArrayOutputStream(); if (in != null) { byte[] buf = new byte[16384]; int n; while ((n = in.read(buf)) > 0) out.write(buf, 0, n); in.close(); }
+                    text = out.toString("UTF-8");
+                } catch (Exception e) { text = "{\"error\":{\"message\":" + JSONObject.quote(String.valueOf(e.getMessage())) + "}}"; }
+                final String js = "window.termiteNetDone(" + id + "," + status + "," + JSONObject.quote(text) + ")";
+                runOnUiThread(() -> web.evaluateJavascript(js, null));
+            }).start();
+        }
+
         /** Saves into the phone's Downloads folder. Returns "ok:<where>" or "error:<reason>". */
         @JavascriptInterface
         public String save(String b64, String name, String mime) {

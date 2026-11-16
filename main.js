@@ -1,5 +1,5 @@
 // Termite desktop (Windows and Linux): shows the same app as the web version, served from the app's own files.
-const { app, BrowserWindow, protocol, net, shell, Menu } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -26,6 +26,13 @@ app.on('second-instance', (e, argv) => {
   const f = fileFrom(argv); if (f) openInPage(f);
 });
 
+const AI_HOSTS = /^https:\/\/(api\.anthropic\.com|api\.venice\.ai|openrouter\.ai|api\.groq\.com|generativelanguage\.googleapis\.com)\/|^http:\/\/(localhost|127\.0\.0\.1):11434\//;
+ipcMain.handle('termite-net', async (e, url, { method = 'POST', headers = {}, body } = {}) => {
+  if (!AI_HOSTS.test(url)) return { status: 403, text: JSON.stringify({ error: { message: 'Termite only talks to known AI services.' } }) };
+  try { const r = await net.fetch(url, { method, headers, body: method === 'GET' ? undefined : body }); return { status: r.status, text: await r.text() }; }
+  catch (err) { return { status: 0, text: JSON.stringify({ error: { message: err.message } }) }; }
+});
+
 app.whenReady().then(() => {
   protocol.handle('app', req => {
     let p = decodeURIComponent(new URL(req.url).pathname);
@@ -38,7 +45,7 @@ app.whenReady().then(() => {
   win = new BrowserWindow({
     width: 1280, height: 860, minWidth: 380, minHeight: 500, title: 'Termite', backgroundColor: '#e7e9ec',
     icon: path.join(WEB, 'icon.png'),
-    webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true }
+    webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true, preload: path.join(__dirname, 'preload.js') }
   });
   const external = url => { if (/^(https?|mailto):/i.test(url)) shell.openExternal(url); };
   win.webContents.setWindowOpenHandler(({ url }) => { external(url); return { action: 'deny' }; });
