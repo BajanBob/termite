@@ -150,7 +150,8 @@ const INLINE = /^(A|B|STRONG|I|EM|U|INS|S|STRIKE|DEL|SPAN|FONT|BR|IMG|SUB|SUP|CO
 const GENERIC = { serif: 'Times New Roman', 'sans-serif': 'Arial', monospace: 'Courier New', 'system-ui': 'Calibri' };
 
 function buildDocx(){
-  const rels = [], media = [], ols = []; let rid = 10, pic = 0;
+  const rels = [], media = [], ols = [], footnotes = [], comments = []; let rid = 10, pic = 0, fnSeq = 0, hasToc = false;
+  const PG = T.page?.get?.() || {};
   const rel = (type, target, ext) => { const id = 'rId' + (++rid); rels.push(`<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${x(target)}"${ext ? ' TargetMode="External"' : ''}/>`); return id; };
 
   function runs(nodes, blk, pre){
@@ -161,6 +162,9 @@ function buildDocx(){
       const tg = n.tagName;
       if (tg === 'BR') { out += '<w:r><w:br/></w:r>'; return; }
       if (tg === 'IMG') { out += image(n); return; }
+      if (tg === 'SPAN' && n.classList.contains('fn')) { const id = ++fnSeq; footnotes.push({ id, text: n.dataset.note || '' }); out += `<w:r><w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr><w:footnoteReference w:id="${id}"/></w:r>`; return; }
+      if (tg === 'SPAN' && n.classList.contains('cmt')) { const id = comments.length; comments.push({ id, text: n.dataset.c || '', author: n.dataset.a || 'Termite', date: n.dataset.d || new Date().toISOString() });
+        out += `<w:commentRangeStart w:id="${id}"/>`; n.childNodes.forEach(c => walk(c, link)); out += `<w:commentRangeEnd w:id="${id}"/><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${id}"/></w:r>`; return; }
       if (tg === 'A' && n.getAttribute('href')) { const before = out; out = ''; n.childNodes.forEach(c => walk(c, true)); const inner = out; out = before + `<w:hyperlink r:id="${rel('hyperlink', n.href, true)}">${inner}</w:hyperlink>`; return; }
       if (/^(UL|OL|TABLE|P|DIV|H[1-6])$/.test(tg)) { const t = n.innerText; if (t) out += run(t.replace(/\s+/g, ' '), n, blk, link); return; }
       n.childNodes.forEach(c => walk(c, link));
@@ -172,7 +176,7 @@ function buildDocx(){
     const cs = getComputedStyle(el); let rp = '', u = false, s = false, bg = null, va = null;
     for (let a = el; a && a !== blk.parentNode && a !== ed; a = a.parentElement) { const st = getComputedStyle(a), d = st.textDecorationLine || '';
       if (/^(U|INS)$/.test(a.tagName) || d.includes('underline')) u = true; if (/^(S|STRIKE|DEL)$/.test(a.tagName) || d.includes('line-through')) s = true;
-      if (!bg && a.tagName !== 'TD' && a.tagName !== 'TH') bg = hex(st.backgroundColor); if (!va && a.tagName === 'SUB') va = 'subscript'; if (!va && a.tagName === 'SUP') va = 'superscript'; }
+      if (!bg && a.tagName !== 'TD' && a.tagName !== 'TH' && !a.classList.contains('cmt')) bg = hex(st.backgroundColor); if (!va && a.tagName === 'SUB') va = 'subscript'; if (!va && a.tagName === 'SUP') va = 'superscript'; }
     if (link) rp += '<w:rStyle w:val="Hyperlink"/>';
     let fam = cs.fontFamily.split(',')[0].replace(/["']/g, '').trim(); fam = GENERIC[fam] || fam; if (pre) fam = 'Courier New';
     if (fam) rp += `<w:rFonts w:ascii="${x(fam)}" w:hAnsi="${x(fam)}" w:cs="${x(fam)}"/>`;
@@ -195,7 +199,8 @@ function buildDocx(){
     const st = blk.classList?.contains('title') ? 'Title' : ({ H1: 'Heading1', H2: 'Heading2', H3: 'Heading3', H4: 'Heading3', H5: 'Heading3', H6: 'Heading3' })[blk.tagName];
     if (st) pp += `<w:pStyle w:val="${st}"/>`; else if (ctx.num) pp += '<w:pStyle w:val="ListParagraph"/>';
     if (ctx.num) pp += `<w:numPr><w:ilvl w:val="${ctx.lvl}"/><w:numId w:val="${ctx.num}"/></w:numPr>`;
-    if (ctx.cell) pp += '<w:spacing w:after="0"/>';
+    const sp = []; if (ctx.cell) sp.push('w:after="0"'); else if (blk.dataset?.sa != null) sp.push(`w:after="${Math.round(+blk.dataset.sa * 20)}"`);
+    if (blk.dataset?.ls) sp.push(`w:line="${Math.round(240 * +blk.dataset.ls)}" w:lineRule="auto"`); if (sp.length) pp += `<w:spacing ${sp.join(' ')}/>`;
     const ind = (ctx.indent || 0) + (/^(P|DIV|H\d|PRE)$/.test(blk.tagName) ? Math.round(parseFloat(cs.marginLeft) * 15) : 0);
     if (ind > 0 && !ctx.num) pp += `<w:ind w:left="${ind}"/>`;
     const jc = { center: 'center', right: 'right', end: 'right', justify: 'both' }[cs.textAlign]; if (jc) pp += `<w:jc w:val="${jc}"/>`;
@@ -219,6 +224,13 @@ function buildDocx(){
       out += `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/>${c.colSpan > 1 ? `<w:gridSpan w:val="${c.colSpan}"/>` : ''}${bg ? `<w:shd w:val="clear" w:color="auto" w:fill="${bg}"/>` : ''}</w:tcPr>${inner}</w:tc>`; } out += '</w:tr>'; }
     return out + '</w:tbl>';
   }
+  function toc(n){
+    hasToc = true; const fld = t => `<w:r><w:fldChar w:fldCharType="${t}"${t === 'begin' ? ' w:dirty="true"' : ''}/></w:r>`;
+    let o = `<w:p><w:pPr><w:pStyle w:val="TOCHeading"/></w:pPr><w:r><w:t>${x(n.querySelector('.toc-h')?.textContent || 'Contents')}</w:t></w:r></w:p>`;
+    o += `<w:p>${fld('begin')}<w:r><w:instrText xml:space="preserve"> TOC \\o "1-3" \\h \\z \\u </w:instrText></w:r>${fld('separate')}</w:p>`;
+    n.querySelectorAll('[data-lvl]').forEach(e => o += `<w:p><w:pPr><w:pStyle w:val="TOC${e.dataset.lvl}"/></w:pPr><w:r><w:t xml:space="preserve">${x(e.textContent)}</w:t></w:r></w:p>`);
+    return o + `<w:p>${fld('end')}</w:p>`;
+  }
   function blocks(box, ctx){
     let out = '', inl = [];
     const fl = () => { if (inl.length) { out += para(inl, box, ctx); inl = []; } };
@@ -226,6 +238,8 @@ function buildDocx(){
       if (n.nodeType === 3 || (n.nodeType === 1 && INLINE.test(n.tagName))) { inl.push(n); continue; }
       if (n.nodeType !== 1) continue; fl();
       const tg = n.tagName;
+      if (n.classList.contains('fnlist')) continue;
+      if (n.classList.contains('toc')) { out += toc(n); continue; }
       if (/^(UL|OL)$/.test(tg)) out += list(n, 0);
       else if (tg === 'TABLE') out += table(n) + (ctx.cell ? '' : '');
       else if (tg === 'HR') out += n.classList.contains('pb') ? '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' : '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="999999"/></w:pBdr></w:pPr></w:p>';
@@ -236,19 +250,44 @@ function buildDocx(){
   }
 
   const body = blocks(ed, {}) + '<w:p/>';
-  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${W}><w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+  const SZ = { A4: [11906, 16838], Letter: [12240, 15840], Legal: [12240, 20160], A5: [8391, 11906] }; let [pw, ph] = SZ[PG.size] || SZ.A4; if (PG.orient === 'landscape') [pw, ph] = [ph, pw];
+  const M = (PG.margins || [1, 1, 1, 1]).map(v => Math.round(v * 1440)), parts = {};
+  const hf = (kind, o) => { if (!o?.text) return ''; const tag = kind === 'header' ? 'hdr' : 'ftr';
+    const inner = o.text.split(/(\{page\}|\{pages\}|\{date\}|\{title\})/).filter(Boolean).map(t => t === '{page}' ? '<w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple>' : t === '{pages}' ? '<w:fldSimple w:instr=" NUMPAGES "><w:r><w:t>1</w:t></w:r></w:fldSimple>'
+      : `<w:r><w:t xml:space="preserve">${x(t === '{date}' ? new Date().toLocaleDateString() : t === '{title}' ? docName.replace(/\.docx$/i, '') : t)}</w:t></w:r>`).join('');
+    parts[kind] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:${tag} ${W}><w:p><w:pPr><w:pStyle w:val="${kind === 'header' ? 'Header' : 'Footer'}"/><w:jc w:val="${{ left: 'left', center: 'center', right: 'right' }[o.align] || 'center'}"/></w:pPr>${inner}</w:p></w:${tag}>`;
+    return `<w:${kind}Reference w:type="default" r:id="${rel(kind, kind + '1.xml')}"/>`; };
+  const refs = hf('header', PG.header) + hf('footer', PG.footer);
+  const sect = `<w:sectPr>${refs}<w:pgSz w:w="${pw}" w:h="${ph}"${PG.orient === 'landscape' ? ' w:orient="landscape"' : ''}/><w:pgMar w:top="${M[0]}" w:right="${M[1]}" w:bottom="${M[2]}" w:left="${M[3]}" w:header="708" w:footer="708" w:gutter="0"/>${PG.cols > 1 ? `<w:cols w:num="${PG.cols}" w:space="720"/>` : ''}${PG.titlePg ? '<w:titlePg/>' : ''}</w:sectPr>`;
+  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${W}><w:body>${body}${sect}</w:body></w:document>`;
   const lvl = (i, fmt, text) => `<w:lvl w:ilvl="${i}"><w:start w:val="1"/><w:numFmt w:val="${fmt}"/><w:lvlText w:val="${text}"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="${720 * (i + 1)}" w:hanging="360"/></w:pPr>${fmt === 'bullet' ? '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/></w:rPr>' : ''}</w:lvl>`;
   const bul = ['•', '◦', '▪'], fmts = ['decimal', 'lowerLetter', 'lowerRoman'];
   const numbering = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:numbering ${W}><w:abstractNum w:abstractNumId="0"><w:multiLevelType w:val="hybridMultilevel"/>${[...Array(9)].map((_, i) => lvl(i, 'bullet', bul[i % 3])).join('')}</w:abstractNum><w:abstractNum w:abstractNumId="1"><w:multiLevelType w:val="hybridMultilevel"/>${[...Array(9)].map((_, i) => lvl(i, fmts[i % 3], `%${i + 1}.`)).join('')}</w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>${ols.map(o => `<w:num w:numId="${o.num}"><w:abstractNumId w:val="1"/><w:lvlOverride w:ilvl="${o.lvl}"><w:startOverride w:val="${o.start}"/></w:lvlOverride></w:num>`).join('')}</w:numbering>`;
   const hd = (id, name, sz, lvlN, extra = '') => `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${name}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="9"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="240" w:after="120"/>${lvlN >= 0 ? `<w:outlineLvl w:val="${lvlN}"/>` : ''}</w:pPr><w:rPr>${extra}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr></w:style>`;
-  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles ${W}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:eastAsia="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="en-GB"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>${hd('Title', 'Title', 56, -1)}${hd('Heading1', 'heading 1', 40, 0, '<w:b/><w:color w:val="1F3864"/>')}${hd('Heading2', 'heading 2', 32, 1, '<w:b/><w:color w:val="1F3864"/>')}${hd('Heading3', 'heading 3', 26, 2, '<w:b/><w:color w:val="1F3864"/>')}<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:after="60"/><w:contextualSpacing/></w:pPr></w:style><w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr></w:style></w:styles>`;
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles ${W}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:eastAsia="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="en-GB"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>${hd('Title', 'Title', 56, -1)}${hd('Heading1', 'heading 1', 40, 0, '<w:b/><w:color w:val="1F3864"/>')}${hd('Heading2', 'heading 2', 32, 1, '<w:b/><w:color w:val="1F3864"/>')}${hd('Heading3', 'heading 3', 26, 2, '<w:b/><w:color w:val="1F3864"/>')}<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:after="60"/><w:contextualSpacing/></w:pPr></w:style><w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr></w:style>`
+    + ['Header', 'Footer'].map(n => `<w:style w:type="paragraph" w:styleId="${n}"><w:name w:val="${n.toLowerCase()}"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="0"/></w:pPr><w:rPr><w:color w:val="595959"/><w:sz w:val="18"/></w:rPr></w:style>`).join('')
+    + `<w:style w:type="paragraph" w:styleId="FootnoteText"><w:name w:val="footnote text"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="0"/></w:pPr><w:rPr><w:sz w:val="20"/></w:rPr></w:style><w:style w:type="character" w:styleId="FootnoteReference"><w:name w:val="footnote reference"/><w:rPr><w:vertAlign w:val="superscript"/></w:rPr></w:style>`
+    + `<w:style w:type="paragraph" w:styleId="CommentText"><w:name w:val="annotation text"/><w:basedOn w:val="Normal"/><w:rPr><w:sz w:val="20"/></w:rPr></w:style><w:style w:type="character" w:styleId="CommentReference"><w:name w:val="annotation reference"/><w:rPr><w:sz w:val="16"/></w:rPr></w:style>`
+    + `<w:style w:type="paragraph" w:styleId="TOCHeading"><w:name w:val="TOC Heading"/><w:basedOn w:val="Heading1"/><w:next w:val="Normal"/><w:pPr><w:outlineLvl w:val="9"/></w:pPr></w:style>`
+    + [1, 2, 3].map(i => `<w:style w:type="paragraph" w:styleId="TOC${i}"><w:name w:val="toc ${i}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:spacing w:after="80"/><w:ind w:left="${(i - 1) * 220}"/></w:pPr></w:style>`).join('') + `</w:styles>`;
   const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z'), title = docName.replace(/\.docx$/i, '');
   const zip = new JSZip();
-  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="gif" ContentType="image/gif"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`);
+  const ctTypes = (`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="gif" ContentType="image/gif"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>__EXTRA__</Types>`);
   zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`);
   zip.file('docProps/core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${x(title)}</dc:title><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`);
   zip.file('docProps/app.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Termite</Application></Properties>`);
   zip.file('word/document.xml', doc); zip.file('word/styles.xml', styles); zip.file('word/numbering.xml', numbering);
+  const CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.', extra = [];
+  if (parts.header) { zip.file('word/header1.xml', parts.header); extra.push(['/word/header1.xml', CT + 'header+xml']); }
+  if (parts.footer) { zip.file('word/footer1.xml', parts.footer); extra.push(['/word/footer1.xml', CT + 'footer+xml']); }
+  if (footnotes.length) { zip.file('word/footnotes.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:footnotes ${W}><w:footnote w:type="separator" w:id="-1"><w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>`
+      + footnotes.map(f => `<w:footnote w:id="${f.id}"><w:p><w:pPr><w:pStyle w:val="FootnoteText"/></w:pPr><w:r><w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> ${x(f.text)}</w:t></w:r></w:p></w:footnote>`).join('') + '</w:footnotes>');
+    rel('footnotes', 'footnotes.xml'); extra.push(['/word/footnotes.xml', CT + 'footnotes+xml']); }
+  if (comments.length) { zip.file('word/comments.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:comments ${W}>` + comments.map(c => `<w:comment w:id="${c.id}" w:author="${x(c.author)}" w:date="${x(c.date.replace(/\.\d+Z$/, 'Z'))}" w:initials="${x(c.author.split(/\s+/).map(w => w[0] || '').join('').slice(0, 3).toUpperCase())}"><w:p><w:pPr><w:pStyle w:val="CommentText"/></w:pPr><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r><w:r><w:t xml:space="preserve">${x(c.text)}</w:t></w:r></w:p></w:comment>`).join('') + '</w:comments>');
+    rel('comments', 'comments.xml'); extra.push(['/word/comments.xml', CT + 'comments+xml']); }
+  zip.file('word/settings.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:settings ${W}>${hasToc ? '<w:updateFields w:val="true"/>' : ''}<w:defaultTabStop w:val="720"/>${footnotes.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ''}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`);
+  rel('settings', 'settings.xml'); extra.push(['/word/settings.xml', CT + 'settings+xml']);
+  zip.file('[Content_Types].xml', ctTypes.replace('__EXTRA__', extra.map(([p, t]) => `<Override PartName="${p}" ContentType="${t}"/>`).join('')));
   zip.file('word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>${rels.join('')}</Relationships>`);
   for (const m of media) zip.file('word/media/' + m.file, m.b64, { base64: true });
   return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', compression: 'DEFLATE' });
@@ -258,11 +297,13 @@ async function docxBlob(){ await lib('jszip'); return buildDocx(); }
 /* ---------- export PDF: each page drawn exactly as it looks, so it reads the same on any phone ---------- */
 async function pdfBlob(){
   await lib('html2canvas'); await lib('jspdf'); const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({ unit: 'pt', format: 'a4', compress: true }), PW = 595.28, PX = 794, M = 76, LIM = 1123 - 2 * M, k = PW / PX;
+  const PG = T.page?.get?.() || {}, IN = { A4: [8.27, 11.69], Letter: [8.5, 11], Legal: [8.5, 14], A5: [5.83, 8.27] }; let [wi, hi] = IN[PG.size] || IN.A4; if (PG.orient === 'landscape') [wi, hi] = [hi, wi];
+  const mg = (PG.margins || [1, 1, 1, 1]).map(v => v * 96), pdf = new jsPDF({ unit: 'pt', format: [wi * 72, hi * 72], orientation: wi > hi ? 'landscape' : 'portrait', compress: true });
+  const PW = wi * 72, PX = Math.round(wi * 96), M = mg[0], LIM = Math.round(hi * 96) - mg[0] - mg[2], k = PW / PX;
   const sections = [[]]; for (const n of ed.childNodes) { if (n.nodeType === 1 && n.matches('hr.pb')) sections.push([]); else sections.at(-1).push(n.cloneNode(true)); }
   let first = true, pages = 0;
   for (const sec of sections) {
-    const box = document.createElement('div'); box.className = 'paper printing'; box.append(...sec); $('#printbay').append(box);
+    const box = document.createElement('div'); box.className = 'paper printing'; box.append(...sec); box.style.width = PX + 'px'; box.style.padding = `0 ${mg[1]}px 0 ${mg[3]}px`; if (PG.cols > 1) { box.style.columnCount = PG.cols; box.style.columnGap = '0.4in'; } $('#printbay').append(box);
     await Promise.all([...box.querySelectorAll('img')].map(i => i.decode().catch(() => {})));
     const top = box.getBoundingClientRect().top, H = Math.ceil(box.getBoundingClientRect().height);
     const cuts = [...box.querySelectorAll('p,li,h1,h2,h3,h4,h5,h6,pre,tr,img,hr')].map(e => Math.ceil(e.getBoundingClientRect().bottom - top) + 2).sort((a, b) => a - b);
@@ -278,6 +319,10 @@ async function pdfBlob(){
     } while (y < H - 1);
     box.remove();
   }
+  const total = pdf.getNumberOfPages(), fillHF = (t, i) => t.replace(/\{page\}/g, i).replace(/\{pages\}/g, total).replace(/\{date\}/g, new Date().toLocaleDateString()).replace(/\{title\}/g, docName.replace(/\.docx$/i, ''));
+  for (let i = 1; i <= total; i++) { if (PG.titlePg && i === 1) continue; pdf.setPage(i); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(90);
+    for (const [o, y] of [[PG.header, mg[0] * k / 2], [PG.footer, hi * 72 - mg[2] * k / 2]]) { if (!o?.text) continue; const t = fillHF(o.text, i), al = o.align || 'center';
+      pdf.text(t, al === 'left' ? mg[3] * k : al === 'right' ? PW - mg[1] * k : PW / 2, y, { align: al === 'center' ? 'center' : al, baseline: 'middle' }); } }
   pdf.setProperties({ title: docName.replace(/\.docx$/i, ''), creator: 'Termite' });
   return pdf.output('blob');
 }

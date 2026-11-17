@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="lib/pdf_viewer.css">
 <link rel="stylesheet" href="kiosk/kiosk.css">
+<link rel="stylesheet" href="tools.css">
 <style>
 /* Layout idea: a workbench. Slim toolbar on top, a drawer for pages and bookmarks on the left, the document on a quiet desk in the middle. */
 :root{
@@ -203,6 +204,7 @@ dialog label input[type=checkbox],dialog label input[type=radio]{display:inline-
   </div>
 
   <button class="tb" id="b-save" title="Save a copy with your form entries and markings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg><span class="lbl">Save copy</span></button>
+  <button class="tb primary-soft" id="b-tools" title="All PDF tools: organise, combine, sign, redact, protect, OCR…"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lbl">All tools</span></button>
   <button class="tb" id="b-toword" title="Turn this PDF into an editable Word document"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13l1.5 5 2.5-4 2.5 4L16 13"/></svg><span class="lbl">Edit as Word</span></button>
   <button class="tb" id="b-share" title="Send by WhatsApp, email or Bluetooth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg><span class="lbl">Share</span></button>
   <div class="more-wrap"><button class="tb" id="b-more" aria-haspopup="true" aria-expanded="false" title="More tools"><span class="lbl">More</span> ▾</button>
@@ -602,6 +604,7 @@ function setMode(m){
   if (k && !kioskLoaded) { status('Opening Kiosk…', 0); kioskLoaded = import('./kiosk/kiosk.js').then(() => $('#status').classList.add('hide')).catch(e => { kioskLoaded = null; status('Kiosk couldn\'t load: ' + (e.message || e), 8000); }); }
 }
 $('#m-pdf').onclick = () => setMode('pdf'); $('#m-write').onclick = () => setMode('write'); $('#m-kiosk').onclick = () => setMode('kiosk');
+let ptools = null; $('#b-tools').onclick = async () => { try { ptools ||= await import('./pdftools.js'); ptools.toggle(); } catch (e) { status('Tools couldn\'t load: ' + (e.message || e), 8000); } };
 $('#b-more').onclick = e => { e.stopPropagation(); const m = $('#more-menu'), open = m.hidden; m.hidden = !open; $('#b-more').setAttribute('aria-expanded', String(open)); };
 addEventListener('click', e => { if (!e.target.closest('.more-wrap')) { $('#more-menu').hidden = true; $('#b-more').setAttribute('aria-expanded', 'false'); } });
 $('#more-menu').addEventListener('click', e => { if (e.target.closest('button')) { $('#more-menu').hidden = true; $('#b-more').setAttribute('aria-expanded', 'false'); } });
@@ -614,6 +617,7 @@ async function save(blob, name){
   if (!downloads) { status('Saving isn\'t available in this view. Open Termite from its own page to save or share files.', 7000); return false; }
   try { await downloads.save({ filename: name, data: blob }); status('Saved "' + name + '".'); return true; } catch (e) { status(e && e.code === 'declined' ? 'Save cancelled.' : 'Couldn\'t save: ' + (e.message || e), 6000); return false; } }
 const termite = globalThis.termite = { status, share, save, ask, setMode, openPdfData: (u8, n) => openData(u8, n),
+  pdf: () => doc, viewer: () => viewer, pdfBytes: () => currentBytes(), pdfName: () => fileName,
   openBytes: (b64, n) => openFile(new File([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], n, { type: /\.pdf$/i.test(n) ? 'application/pdf' : '' })) };
 
 /* ---------- hide & reveal (steganography, with optional encryption) ---------- */
@@ -740,6 +744,7 @@ addEventListener('keydown', e => {
 const sample = new Uint8Array(await (await fetch(new URL('./welcome.pdf', import.meta.url))).arrayBuffer());
 await openData(sample, 'welcome.pdf');
 await import('./writer.js');
+import('./wordplus.js').catch(e => console.error('Word tools:', e));
 if (location.hash === '#word') setMode('write'); else if (location.hash === '#kiosk') setMode('kiosk');
 import('./hints.js').catch(() => {});
 </script>

@@ -9,11 +9,24 @@ Termite reads, marks up and fills PDFs, writes Word documents, and includes **Ki
 - Search the text, view thumbnails and bookmarks, zoom and rotate.
 - Highlight, draw and add text, fill in forms, then save a copy.
 - **Edit as Word** turns a PDF's text into an editable document.
+- **All tools:**
+  - **Organise:** organise pages (drag to reorder, rotate, delete, duplicate, insert blank or from another PDF, extract), combine files, split, images to PDF, export as images.
+  - **Edit:** cover and retype, add image, stamps (Approved, Paid, Confidential…), watermark, page numbers with headers and footers.
+  - **Sign and protect:** fill and sign (draw, type or upload a signature), redact (true removal; pages are rebuilt), password protect (AES-256), remove password, reduce file size.
+  - **Scan and review:** scan to text (on-device OCR, makes scans searchable or sends the text to Word mode), compare two PDFs, print.
 
 ### Word
 - Open and edit .docx files with styles, fonts, colours, lists, tables, pictures, links and page breaks.
 - Find and replace, and see a word count.
 - Save as .docx or make a PDF.
+- **Templates:** letter, memo, CV, invoice, report, meeting minutes and a two-column newsletter.
+- **Layout:** page setup (A4, Letter, Legal, A5; portrait or landscape; margins), headers and footers with page numbers, one to three columns, line spacing and paragraph spacing.
+- **Insert:** contents page (a real Word table of contents), footnotes, comments (saved as real Word comments), symbols, date and a signature line.
+- **Table tools:** add or delete rows and columns, and shade the header row.
+- **Text tools:** change case and a format painter.
+- **Review:** comments panel, read aloud, and word count with reading time.
+- **✨ AI:** improve, fix grammar, shorten, lengthen, change tone, summarise, translate, continue writing or ask anything. It uses Kiosk's AI coalition.
+- **Print:** in the Windows and Linux apps.
 
 ### Kiosk
 | Studio | What it does |

@@ -7,8 +7,8 @@ android {
         applicationId 'org.termite.app'
         minSdk 24
         targetSdk 34
-        versionCode 120
-        versionName '1.2'
+        versionCode 130
+        versionName '1.3'
     }
     signingConfigs {
         // One fixed key, kept in the repository, so every new build installs over the old one.

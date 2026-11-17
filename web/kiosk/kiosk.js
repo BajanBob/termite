@@ -165,7 +165,7 @@ function about(p){
     <li><b>Predictive:</b> Harry's forecasts test several methods on your own recent figures and pick the most accurate; anomaly checks flag unusual numbers.</li>
     <li><b>Learns your habits:</b> the home screen suggests studios from what you use and when, kept only on this device.</li>
     <li><b>Private by design:</b> your files are processed on your device. Text goes only to the AI services you switch on.</li></ul></div>
-  <div class="k-card"><h4>Built with</h4><p class="muted">pdf.js (Apache-2.0), ExcelJS (MIT), PptxGenJS (MIT), Chart.js (MIT), mammoth (BSD-2), JSZip (MIT), jsPDF (MIT), html2canvas (MIT). The Picture Editor is Termite's own tool, made in the spirit of desktop photo editors. It is not affiliated with NCH Software, Microsoft, Adobe or any AI provider named here.</p></div>`;
+  <div class="k-card"><h4>Built with</h4><p class="muted">pdf.js (Apache-2.0), pdf-lib (MIT), Tesseract.js (Apache-2.0), ExcelJS (MIT), PptxGenJS (MIT), Chart.js (MIT), mammoth (BSD-2), JSZip (MIT), jsPDF (MIT), html2canvas (MIT). The Picture Editor is Termite's own tool, made in the spirit of desktop photo editors. It is not affiliated with NCH Software, Microsoft, Adobe or any AI provider named here.</p></div>`;
   return {};
 }
 
