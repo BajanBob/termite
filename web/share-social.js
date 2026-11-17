@@ -93,6 +93,8 @@ function open(kind){
 }
 $('#sh-fbg').onclick = () => open('group');
 $('#sh-fbp').onclick = () => open('page');
+// Smart Send reuses these panels: open one with a saved group or Page already chosen.
+T.social = { fb: () => fb, open(kind, index){ open(kind); const sel = panel.querySelector('#fb-pick'); if (sel && index != null && index >= 0) { sel.value = String(index); sel.dispatchEvent(new Event('change')); } panel.scrollIntoView({ block: 'nearest' }); } };
 // tidy the panel each time the Share window opens
 new MutationObserver(() => { if ($('#dlg-share').open) { panel.hidden = true; panel.innerHTML = ''; grid.querySelectorAll('.sbtn').forEach(b => b.setAttribute('aria-pressed', 'false')); } }).observe($('#dlg-share'), { attributes: true, attributeFilter: ['open'] });
 

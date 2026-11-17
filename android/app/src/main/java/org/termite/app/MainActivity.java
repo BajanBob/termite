@@ -254,6 +254,48 @@ public class MainActivity extends Activity {
             } catch (Exception e) { return "error:" + e.getMessage(); }
         }
 
+        /** Smart Send: the file to one WhatsApp chat (by phone number) with a message. Returns "ok", "missing" or "error:…". */
+        @JavascriptInterface
+        public String shareToChat(String b64, String name, String mime, String pkg, String phone, String text) {
+            try {
+                final Uri u = writeShareFile(Base64.decode(b64, Base64.DEFAULT), name);
+                final Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType(mime == null || mime.isEmpty() ? "application/octet-stream" : mime);
+                send.putExtra(Intent.EXTRA_STREAM, u);
+                if (text != null && !text.isEmpty()) send.putExtra(Intent.EXTRA_TEXT, text);
+                String digits = phone == null ? "" : phone.replaceAll("\\D", "");
+                if (!digits.isEmpty()) send.putExtra("jid", digits + "@s.whatsapp.net");   // WhatsApp opens that chat directly
+                send.setClipData(ClipData.newRawUri(name, u));
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                send.setPackage(pkg);
+                if (send.resolveActivity(getPackageManager()) == null) return "missing";
+                runOnUiThread(() -> { try { startActivity(send); } catch (Exception e) { toast("Couldn't open WhatsApp."); } });
+                return "ok";
+            } catch (Exception e) { return "error:" + e.getMessage(); }
+        }
+
+        /** Smart Send: a new email with the address, subject, message and file filled in; only email apps are offered. */
+        @JavascriptInterface
+        public String email(String b64, String name, String mime, String to, String subject, String body) {
+            try {
+                final Uri u = writeShareFile(Base64.decode(b64, Base64.DEFAULT), name);
+                final Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType(mime == null || mime.isEmpty() ? "application/octet-stream" : mime);
+                send.putExtra(Intent.EXTRA_STREAM, u);
+                if (to != null && !to.isEmpty()) send.putExtra(Intent.EXTRA_EMAIL, new String[]{ to });
+                send.putExtra(Intent.EXTRA_SUBJECT, subject == null ? "" : subject);
+                send.putExtra(Intent.EXTRA_TEXT, body == null ? "" : body);
+                send.setClipData(ClipData.newRawUri(name, u));
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                send.setSelector(new Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")));
+                runOnUiThread(() -> {
+                    try { startActivity(Intent.createChooser(send, "Email with")); }
+                    catch (Exception e) { send.setSelector(null); try { startActivity(Intent.createChooser(send, "Send with")); } catch (Exception e2) { toast("No email app found."); } }
+                });
+                return "ok";
+            } catch (Exception e) { return "error:" + e.getMessage(); }
+        }
+
         /** Sends several pictures to one app (e.g. Facebook), or to the share menu if it isn't installed. */
         @JavascriptInterface
         public String shareImages(String jsonList, String baseName, String pkg) {

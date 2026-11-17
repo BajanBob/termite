@@ -61,22 +61,99 @@ async function copyFileToClipboard(file) {
   }
   return false;
 }
-ipcMain.handle('termite-share-file', async (e, bytes, filename, target) => {
-  if (!e.senderFrame || !String(e.senderFrame.url).startsWith('app://')) return { ok: false, error: 'Not allowed' };
+// Where Smart Send may take you. Everything else is refused.
+const WEB_OK = /^https:\/\/(mail\.google\.com|outlook\.live\.com|outlook\.office\.com|compose\.mail\.yahoo\.com|www\.facebook\.com|m\.facebook\.com|web\.whatsapp\.com|wa\.me)\//;
+const digits = p => String(p || '').replace(/\D/g, '').slice(0, 15);
+function whatsappUrl(phone, text) {
+  const q = new URLSearchParams(); if (digits(phone)) q.set('phone', digits(phone)); if (text) q.set('text', String(text).slice(0, 2000));
+  const hasApp = !!app.getApplicationNameForProtocol('whatsapp://send');
+  return { url: (hasApp ? 'whatsapp://send?' : 'https://web.whatsapp.com/send?') + q.toString().replace(/\+/g, '%20'), kind: hasApp ? 'app' : 'web' };
+}
+function composeUrl(service, { to = '', subject = '', body = '' } = {}) {
+  const e = encodeURIComponent;
+  if (service === 'gmail') return `https://mail.google.com/mail/?view=cm&fs=1&to=${e(to)}&su=${e(subject)}&body=${e(body)}`;
+  if (service === 'outlook') return `https://outlook.live.com/mail/0/deeplink/compose?to=${e(to)}&subject=${e(subject)}&body=${e(body)}`;
+  if (service === 'office') return `https://outlook.office.com/mail/deeplink/compose?to=${e(to)}&subject=${e(subject)}&body=${e(body)}`;
+  if (service === 'yahoo') return `https://compose.mail.yahoo.com/?to=${e(to)}&subject=${e(subject)}&body=${e(body)}`;
+  return `mailto:${e(to)}?subject=${e(subject)}&body=${e(body)}`;
+}
+const okEmail = t => /^[^\s@<>,;"]+@[^\s@<>,;"]+\.[^\s@<>,;"]+$/.test(t);
+// A draft email (.eml) with the file attached; "X-Unsent: 1" makes mail apps open it as a draft.
+function writeEml(file, { to = '', subject = '', body = '' }, mime) {
+  const enc = t => /^[\x20-\x7e]*$/.test(t) ? t : `=?UTF-8?B?${Buffer.from(t).toString('base64')}?=`;
+  const b64 = buf => buf.toString('base64').replace(/.{76}/g, '$&\r\n');
+  const name = path.basename(file), ascii = name.normalize('NFD').replace(/[^\x20-\x7e]/g, '').replace(/"/g, '') || 'document', boundary = 'termite-' + Date.now().toString(36);
+  const eml = [
+    okEmail(to) ? `To: ${to}` : null, `Subject: ${enc(subject)}`, 'X-Unsent: 1', 'MIME-Version: 1.0',
+    `Content-Type: multipart/mixed; boundary="${boundary}"`, '', `--${boundary}`,
+    'Content-Type: text/plain; charset=utf-8', 'Content-Transfer-Encoding: base64', '', b64(Buffer.from(body)), `--${boundary}`,
+    `Content-Type: ${mime || 'application/octet-stream'}; name="${ascii}"`, 'Content-Transfer-Encoding: base64',
+    `Content-Disposition: attachment; filename="${ascii}"` + (ascii === name ? '' : `; filename*=UTF-8''${encodeURIComponent(name).replace(/['()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())}`), '', b64(fs.readFileSync(file)), `--${boundary}--`, ''
+  ].filter(l => l !== null).join('\r\n');
+  const dir = path.join(path.dirname(file), 'Email drafts'); fs.mkdirSync(dir, { recursive: true });
+  const out = uniquePath(dir, name.replace(/\.[^.]+$/, '') + '.eml'); fs.writeFileSync(out, eml); return out;
+}
+// Opens a new email in the computer's own mail app with the file already attached.
+async function emailWithApp(file, mail, mime) {
+  const to = okEmail(mail.to || '') ? mail.to : '';
+  if (process.platform === 'win32') {
+    // Classic Outlook: a real draft through Outlook itself. Values go in through environment variables.
+    const ps = '$o = New-Object -ComObject Outlook.Application; $m = $o.CreateItem(0); if ($env:T_TO) { $m.To = $env:T_TO }; $m.Subject = $env:T_SUBJ; $m.Body = $env:T_BODY; [void]$m.Attachments.Add($env:T_FILE); $m.Display($false)';
+    const r = await new Promise(res => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-STA', '-Command', ps],
+      { timeout: 45000, windowsHide: true, env: { ...process.env, T_TO: to, T_SUBJ: mail.subject || '', T_BODY: mail.body || '', T_FILE: file } }, err => res(!err || err.killed)));
+    if (r) return 'outlook';
+    const eml = writeEml(file, { ...mail, to }, mime);
+    return (await shell.openPath(eml)) ? null : 'eml';
+  }
+  if (process.platform === 'linux') {
+    const args = ['--subject', mail.subject || '', '--body', mail.body || '', '--attach', file]; if (to) args.push(to);
+    if (await run('xdg-email', args)) return 'app';
+    const eml = writeEml(file, { ...mail, to }, mime);
+    return (await shell.openPath(eml)) ? null : 'eml';
+  }
+  return null;
+}
+async function saveShared(bytes, filename) {
+  const dir = path.join(app.getPath('downloads'), 'Termite');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = uniquePath(dir, safeName(filename));
+  fs.writeFileSync(file, Buffer.from(bytes));
+  return file;
+}
+const fromApp = e => e.senderFrame && String(e.senderFrame.url).startsWith('app://');
+
+// target: 'whatsapp' | 'email' | 'facebook' | 'save'. opts: { phone, text, to, subject, body, service, url, mime }
+ipcMain.handle('termite-share-file', async (e, bytes, filename, target, opts = {}) => {
+  if (!fromApp(e)) return { ok: false, error: 'Not allowed' };
   try {
-    const dir = path.join(app.getPath('downloads'), 'Termite');
-    fs.mkdirSync(dir, { recursive: true });
-    const file = uniquePath(dir, safeName(filename));
-    fs.writeFileSync(file, Buffer.from(bytes));
-    const copied = await copyFileToClipboard(file);
-    shell.showItemInFolder(file);
-    let opened = null;
-    if (target === 'whatsapp') {
-      const hasApp = !!app.getApplicationNameForProtocol('whatsapp://send');
-      try { await shell.openExternal(hasApp ? 'whatsapp://send' : 'https://web.whatsapp.com/'); opened = hasApp ? 'app' : 'web'; } catch (err) { opened = null; }
+    const file = await saveShared(bytes, filename);
+    const out = { ok: true, path: file, folder: path.dirname(file), copied: false, opened: null };
+    if (target === 'email' && (opts.service || 'app') === 'app') {
+      out.opened = await emailWithApp(file, opts, opts.mime);
+      if (out.opened) return out;                                   // attached already: nothing to paste
+      opts.service = 'mailto';
     }
-    return { ok: true, path: file, folder: dir, copied, opened };
+    out.copied = await copyFileToClipboard(file);
+    shell.showItemInFolder(file);
+    try {
+      if (target === 'whatsapp') { const w = whatsappUrl(opts.phone, opts.text); await shell.openExternal(w.url); out.opened = w.kind; }
+      else if (target === 'email') { await shell.openExternal(composeUrl(opts.service, opts)); out.opened = opts.service; }
+      else if (target === 'facebook') { const u = WEB_OK.test(opts.url || '') ? opts.url : 'https://www.facebook.com/'; await shell.openExternal(u); out.opened = 'web'; }
+    } catch (err) { out.opened = null; }
+    return out;
   } catch (err) { return { ok: false, error: err.message }; }
+});
+
+// Opens WhatsApp, an email service or Facebook with nothing attached ("open my WhatsApp").
+ipcMain.handle('termite-open-app', async (e, target, opts = {}) => {
+  if (!fromApp(e)) return { ok: false };
+  try {
+    if (target === 'whatsapp') { const w = whatsappUrl(opts.phone, opts.text); await shell.openExternal(w.url); return { ok: true, opened: w.kind }; }
+    if (target === 'email') { const u = composeUrl(opts.service, opts); if (opts.service && opts.service !== 'app' && opts.service !== 'mailto' && !WEB_OK.test(u)) return { ok: false };
+      await shell.openExternal(opts.service === 'gmail' && !opts.to && !opts.subject ? 'https://mail.google.com/' : u); return { ok: true, opened: opts.service || 'app' }; }
+    if (target === 'facebook') { await shell.openExternal(WEB_OK.test(opts.url || '') ? opts.url : 'https://www.facebook.com/'); return { ok: true, opened: 'web' }; }
+  } catch (err) {}
+  return { ok: false };
 });
 
 app.whenReady().then(() => {

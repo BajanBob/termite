@@ -746,7 +746,7 @@ await import('./writer.js');
 import('./wordplus.js').catch(e => console.error('Word tools:', e));
 if (location.hash === '#word') setMode('write'); else if (location.hash === '#kiosk') setMode('kiosk');
 import('./hints.js').catch(() => {});
-import('./share-social.js').catch(e => console.error('Social sharing:', e));
+import('./share-social.js').then(() => import('./smartsend.js')).catch(e => console.error('Social sharing:', e));
 </script>
 </body>
 </html>

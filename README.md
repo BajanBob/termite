@@ -62,7 +62,11 @@ Keys are stored only on your device. The desktop and Android apps send AI reques
 A **hint of the day** pops up once a day. Click it to dismiss it.
 
 ### Share
-- **WhatsApp:** on Android the file goes straight into WhatsApp (or WhatsApp Business), already attached. Elsewhere, save it and the WhatsApp button opens the chat.
+- **Smart Send:** type who should get it and how, in your own words: "WhatsApp it to Mum", "email it to sam@acme.com saying 'here's the draft'", "post in Bridgetown Business", "open my Facebook". Termite picks the app and the person, writes the message (or lets your AI write it from the document), attaches the file and opens the right chat or email. It learns who you send to and suggests them next time. People and suggestions stay on your device (Share › People).
+  - **Android:** WhatsApp opens that person's chat with the file and message attached; email opens your mail app with address, subject, message and file filled in.
+  - **Windows:** classic Outlook opens a draft with the file attached; other mail apps get a draft email file with it attached. Gmail, Outlook.com and Yahoo open with the email written, and the file is on the clipboard (Ctrl+V) and in Downloads › Termite. WhatsApp opens that person's chat with the message typed; press Ctrl+V to attach the file.
+  - **Linux:** your mail app's compose window with the file attached (xdg-email).
+- **WhatsApp:** on Android the file goes straight into WhatsApp (or WhatsApp Business), already attached. On Windows and Linux the WhatsApp button copies the file so you can paste it into the chat with Ctrl+V.
 - **Facebook group:** pick a saved group, then save the file and open the group to attach it (PDF, Word, Excel, PowerPoint, text). Facebook stopped letting apps post into groups in April 2024, so this last tap is yours.
 - **Facebook Page:** Pages can't attach documents, so Termite posts pictures of the pages. On Android, Facebook opens with the pictures ready; on desktop, they're saved in a .zip to upload.
 - **Email and Bluetooth**, plus **Send…** on Android for any other app.
