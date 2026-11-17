@@ -25,6 +25,7 @@ Termite reads, marks up and fills PDFs, writes Word documents, and includes **Ki
 | **Business Plan Writer** | Outlines the plan, writes each section, builds 3-year projections in Harry, and opens the plan in Word mode. |
 | **Picture Editor** | Crop, rotate, flip, resize, adjust, apply looks, auto-enhance, add text and drawing, and get AI captions inside Claude. |
 | **Jingle & Music Studio** | Lyrics, chords and melody played by a built-in band (synth, bass, drums, steel pan), saved as WAV. |
+| **VoiceOver** | Write a script (or have AI write it), pick a voice style (deep and cinematic, warm, broadcast, promo, documentary, Caribbean), then voice it with Venice AI or ElevenLabs voices, record your own voice with a teleprompter, or have Termite write a brief for a voice actor on Fiverr or PeoplePerHour and import their recording. Background music is mixed underneath, and the result goes straight to the Video Maker. Termite doesn't copy or imitate real people's voices. |
 | **Video & Movie Maker** | Clips, photos and title cards with trims, captions, fades and music, plus an AI storyboard. Exports MP4 or WebM in 16:9, 9:16 or square. |
 
 **Ask Kiosk** sends a plain-English request to the right studio. The home screen learns which studios you use, and when, and suggests them. This is kept on your device.
@@ -40,6 +41,7 @@ Kiosk can use several AI services. In **Fastest** mode it uses the first one in 
 | Groq | Free key. |
 | Google Gemini | Free key. |
 | Ollama on your own computer | No key needed. |
+| ElevenLabs (VoiceOver only) | API key. Voices added from its Voice Library to your account appear in Termite. |
 
 Keys are stored only on your device. The desktop and Android apps send AI requests only to these services.
 

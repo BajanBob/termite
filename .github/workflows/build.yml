@@ -8,11 +8,11 @@ on:
     inputs:
       release_tag:
         description: Release tag
-        default: termite-v1.1
+        default: termite-v1.2
 permissions:
   contents: write
 env:
-  TAG: ${{ github.event.inputs.release_tag || 'termite-v1.1' }}
+  TAG: ${{ github.event.inputs.release_tag || 'termite-v1.2' }}
 
 jobs:
   windows:
@@ -70,11 +70,11 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
-          name: Termite 1.1
+          name: Termite 1.2
           target_commitish: ${{ github.sha }}
           files: "*.zip"
           body: |
-            Termite 1.1: adds Kiosk (Harry the Accountant, Financial Analysis, Pitch Deck, Brochure and Business Plan agents, Picture Editor, Jingle & Music Studio, Video & Movie Maker) with Claude, Venice AI and free AI models, plus a daily hint. © 2026 Kammie Holder, Ai Innovation Studio.
+            Termite 1.2: adds the VoiceOver studio (Venice AI and ElevenLabs voices, record your own, or brief a Fiverr/PeoplePerHour voice actor) to Kiosk (Harry the Accountant, Financial Analysis, Pitch Deck, Brochure and Business Plan agents, Picture Editor, Jingle & Music Studio, Video & Movie Maker) with Claude, Venice AI and free AI models, plus a daily hint. © 2026 Kammie Holder, Ai Innovation Studio.
             - Termite-Windows-Installer.zip: unzip and run Termite-Setup to install (adds a Start menu entry).
             - Termite-Windows-Portable.zip: unzip and run the .exe, no install needed.
             - Termite-Linux.zip: an AppImage (make it executable and run it) and a .deb for Debian/Ubuntu.

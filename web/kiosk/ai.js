@@ -28,10 +28,16 @@ export async function claudeHere(){
 /* ---------- HTTP that works in the browser, the desktop app and the Android app ---------- */
 let seq = 0; const waiting = {};
 window.termiteNetDone = (id, status, text) => { const w = waiting[id]; if (w) { delete waiting[id]; w({ status, text }); } };
-async function http(url, { method = 'POST', headers = {}, body } = {}){
-  if (window.termiteNet?.fetch) return window.termiteNet.fetch(url, { method, headers, body });
-  if (window.TermiteAndroid?.http) { const id = ++seq; return new Promise(res => { waiting[id] = res; window.TermiteAndroid.http(id, url, method, JSON.stringify(headers), body || ''); }); }
-  const r = await fetch(url, { method, headers, body }); return { status: r.status, text: await r.text() };
+window.termiteNetDoneBinary = (id, status, b64) => { const w = waiting[id]; if (w) { delete waiting[id]; w({ status, b64 }); } };
+/** HTTP that works everywhere. With binary:true the reply carries b64 (base64 body) instead of text. */
+export async function http(url, { method = 'POST', headers = {}, body, binary = false } = {}){
+  if (window.termiteNet?.fetch) return window.termiteNet.fetch(url, { method, headers, body, binary });
+  if (window.TermiteAndroid?.http) { const id = ++seq; return new Promise(res => { waiting[id] = res;
+    if (binary && window.TermiteAndroid.httpBinary) window.TermiteAndroid.httpBinary(id, url, method, JSON.stringify(headers), body || '');
+    else window.TermiteAndroid.http(id, url, method, JSON.stringify(headers), body || ''); }); }
+  const r = await fetch(url, { method, headers, body });
+  if (binary && r.ok) { const u = new Uint8Array(await r.arrayBuffer()); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return { status: r.status, b64: btoa(s) }; }
+  return { status: r.status, text: await r.text() };
 }
 
 export async function usable(){

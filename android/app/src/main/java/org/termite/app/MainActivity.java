@@ -40,6 +40,18 @@ public class MainActivity extends Activity {
     private static final String HOME = "https://appassets.androidplatform.net/assets/index.html";
     private WebView web;
     private ValueCallback<Uri[]> pending;
+    private static final int MIC = 42;
+    private android.webkit.PermissionRequest micRequest;
+
+    @Override
+    public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        super.onRequestPermissionsResult(code, perms, results);
+        if (code == MIC && micRequest != null) {
+            if (results.length > 0 && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) micRequest.grant(new String[]{android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+            else { micRequest.deny(); toast("Microphone not allowed, so recording is off."); }
+            micRequest = null;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle state) {
@@ -71,6 +83,17 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView v, String url) { deliver(getIntent()); }
         });
         web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(final android.webkit.PermissionRequest req) {
+                runOnUiThread(() -> {
+                    boolean audioOnly = true;
+                    for (String r : req.getResources()) if (!android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) audioOnly = false;
+                    if (!audioOnly || !"appassets.androidplatform.net".equals(req.getOrigin().getHost())) { req.deny(); return; }
+                    if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        micRequest = req; requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO}, MIC);
+                    } else req.grant(new String[]{android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                });
+            }
             @Override
             public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (pending != null) pending.onReceiveValue(null);
@@ -157,12 +180,18 @@ public class MainActivity extends Activity {
     }
 
     private static final java.util.regex.Pattern AI_HOSTS = java.util.regex.Pattern.compile(
-            "^https://(api\\.anthropic\\.com|api\\.venice\\.ai|openrouter\\.ai|api\\.groq\\.com|generativelanguage\\.googleapis\\.com)/.*|^http://(localhost|127\\.0\\.0\\.1):11434/.*");
+            "^https://(api\\.anthropic\\.com|api\\.venice\\.ai|openrouter\\.ai|api\\.groq\\.com|api\\.elevenlabs\\.io|generativelanguage\\.googleapis\\.com)/.*|^http://(localhost|127\\.0\\.0\\.1):11434/.*");
 
     class Bridge {
         /** Kiosk's AI requests (Venice, Groq, Gemini, OpenRouter, Anthropic, Ollama). Answers via termiteNetDone(id, status, text). */
         @JavascriptInterface
-        public void http(final int id, final String url, final String method, final String headersJson, final String body) {
+        public void http(final int id, final String url, final String method, final String headersJson, final String body) { request(id, url, method, headersJson, body, false); }
+
+        /** Same as http, for audio: the reply's body comes back base64-encoded via termiteNetDoneBinary. */
+        @JavascriptInterface
+        public void httpBinary(final int id, final String url, final String method, final String headersJson, final String body) { request(id, url, method, headersJson, body, true); }
+
+        private void request(final int id, final String url, final String method, final String headersJson, final String body, final boolean binary) {
             new Thread(() -> {
                 int status = 0; String text;
                 try {
@@ -175,9 +204,9 @@ public class MainActivity extends Activity {
                     status = c.getResponseCode();
                     InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream();
                     ByteArrayOutputStream out = new ByteArrayOutputStream(); if (in != null) { byte[] buf = new byte[16384]; int n; while ((n = in.read(buf)) > 0) out.write(buf, 0, n); in.close(); }
-                    text = out.toString("UTF-8");
+                    text = binary && status < 400 ? Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP) : out.toString("UTF-8");
                 } catch (Exception e) { text = "{\"error\":{\"message\":" + JSONObject.quote(String.valueOf(e.getMessage())) + "}}"; }
-                final String js = "window.termiteNetDone(" + id + "," + status + "," + JSONObject.quote(text) + ")";
+                final String js = (binary && status > 0 && status < 400 ? "window.termiteNetDoneBinary(" : "window.termiteNetDone(") + id + "," + status + "," + JSONObject.quote(text) + ")";
                 runOnUiThread(() -> web.evaluateJavascript(js, null));
             }).start();
         }

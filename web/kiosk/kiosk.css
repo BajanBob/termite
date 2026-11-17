@@ -216,3 +216,10 @@
   .h-grid{height:56vh}
   .daily-hint{left:12px;right:12px;max-width:none}
 }
+
+/* voice-over */
+.prompter{margin-top:10px;height:160px;overflow:hidden;background:#111;color:#fff;border-radius:10px;padding:14px 16px;font-size:22px;line-height:1.6;white-space:pre-wrap}
+.prompter[hidden]{display:none}
+.hr-text{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--desk);color:var(--ink);font:13px/1.5 ui-monospace,Consolas,monospace;margin:8px 0}
+.hr-text[hidden]{display:none}
+a.kb{text-decoration:none}

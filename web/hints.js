@@ -29,6 +29,8 @@ const HINTS = [
   ['Music', 'Jingle Studio › Use in a video sends your jingle straight to the Video Maker as music.'],
   ['Video', 'Choose Portrait 9:16 in the Video Maker for WhatsApp Status, Reels and TikTok.'],
   ['Video', 'Storyboard with AI writes titles, captions and a voice-over script for your clips.'],
+  ['Voice', 'VoiceOver writes your script, voices it with Venice or ElevenLabs voices, and sends it to the Video Maker with the music turned down underneath.'],
+  ['Voice', 'Want a real voice actor? VoiceOver › Hire a voice actor writes the brief for Fiverr or PeoplePerHour, then imports their recording.'],
   ['Pictures', 'Auto-enhance in the Picture Editor fixes dull or dark photos in one click.'],
   ['Pictures', 'Try the Looks in the Picture Editor (Vintage, Dramatic, Black & white), then press Apply.'],
 ];

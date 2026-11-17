@@ -189,14 +189,18 @@ export function video(root, K){
   root.innerHTML = `<div class="k-head"><div><h2>Video &amp; Movie Maker</h2><p>Put clips, photos and title cards in order, trim them, add captions and music, then export a video ready for WhatsApp, YouTube or Facebook.</p></div>
     <div class="k-acts"><button class="kb" id="v-story">Storyboard with AI</button></div></div>
   <div class="k-tool"><label class="kb primary">Add clips or photos<input type="file" id="v-add" accept="video/*,image/*" multiple hidden></label><button class="kb" id="v-title">Add title card</button>
-    <label class="kb">Music<input type="file" id="v-music" accept="audio/*" hidden></label><span class="muted" id="v-mname">No music</span><span class="k-sep"></span>
+    <label class="kb">Music<input type="file" id="v-music" accept="audio/*" hidden></label><span class="muted" id="v-mname">No music</span>
+    <label class="kb">Voice-over<input type="file" id="v-voice" accept="audio/*" hidden></label><span class="muted" id="v-vname">No voice-over</span><span class="k-sep"></span>
     <label class="kf inline"><span>Shape</span><select id="v-shape"><option value="1280x720">Landscape 16:9</option><option value="720x1280">Portrait 9:16 (Status, Reels)</option><option value="1080x1080">Square</option></select></label>
     <button class="kb" id="v-prev">▶ Preview</button><button class="kb primary" id="v-export">Export video</button></div>
   <div class="v-body"><div class="v-screen"><canvas id="v-cv" width="1280" height="720"></canvas><div class="v-time" id="v-time"></div></div>
     <ol class="v-list" id="v-list"><li class="k-empty">Add clips, photos or title cards. Drag to reorder.</li></ol></div>`;
   const cv = $('#v-cv'), g = cv.getContext('2d'); let items = [], music = null, stopFlag = false, running = false;
   const W = () => cv.width, H = () => cv.height;
-  if (K.shared.music) { music = K.shared.music; $('#v-mname').textContent = '♪ ' + music.name; }
+  let vo = null;
+  const pickShared = () => { if (K.shared.music && K.shared.music !== music) { music = K.shared.music; $('#v-mname').textContent = '♪ ' + music.name; } if (K.shared.voice && K.shared.voice !== vo) { vo = K.shared.voice; $('#v-vname').textContent = '🎙 ' + vo.name; } };
+  pickShared();
+  $('#v-voice').onchange = e => { const f = e.target.files[0]; if (f) { vo = { blob: f, name: f.name }; $('#v-vname').textContent = '🎙 ' + f.name; } };
   $('#v-shape').onchange = e => { const [w, h] = e.target.value.split('x').map(Number); cv.width = w; cv.height = h; drawAt(0); };
   $('#v-add').onchange = async e => { for (const f of e.target.files) { const url = URL.createObjectURL(f);
       if (f.type.startsWith('video')) { const v = document.createElement('video'); v.src = url; v.muted = true; v.playsInline = true; v.preload = 'auto'; await new Promise(r => { v.onloadedmetadata = r; v.onerror = r; });
@@ -236,20 +240,22 @@ export function video(root, K){
     if (!items.length) { K.status('Add at least one clip, photo or title card.'); return null; }
     if (running) { stopFlag = true; return null; } running = true; stopFlag = false;
     const ac = new AudioContext(), dest = ac.createMediaStreamDestination(), out = record ? dest : ac.destination; let musicSrc = null;
-    if (music) { try { const buf = await ac.decodeAudioData(await music.blob.arrayBuffer()); musicSrc = ac.createBufferSource(); musicSrc.buffer = buf; musicSrc.loop = buf.duration < total(); const mg = ac.createGain(); mg.gain.value = 0.7; musicSrc.connect(mg); mg.connect(out); if (record) mg.connect(ac.destination); } catch (e) { K.status('That music file can\'t be decoded here.'); } }
+    if (music) { try { const buf = await ac.decodeAudioData(await music.blob.arrayBuffer()); musicSrc = ac.createBufferSource(); musicSrc.buffer = buf; musicSrc.loop = buf.duration < total(); const mg = ac.createGain(); mg.gain.value = vo ? 0.25 : 0.7; musicSrc.connect(mg); mg.connect(out); if (record) mg.connect(ac.destination); } catch (e) { K.status('That music file can\'t be decoded here.'); } }
+    let voSrc = null;
+    if (vo) { try { const buf = await ac.decodeAudioData(await vo.blob.arrayBuffer()); voSrc = ac.createBufferSource(); voSrc.buffer = buf; const vg = ac.createGain(); vg.gain.value = 1; voSrc.connect(vg); vg.connect(out); if (record) vg.connect(ac.destination); if (buf.duration > total() + 0.5) K.status(`The voice-over (${Math.round(buf.duration)} s) is longer than the video (${Math.round(total())} s); lengthen photos or clips so it isn't cut off.`, 8000); } catch (e) { K.status('That voice-over file can\'t be decoded here.'); } }
     let rec = null, chunks = [], mime = '';
     if (record) { const stream = cv.captureStream(30); dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
       mime = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'].find(m => window.MediaRecorder?.isTypeSupported?.(m));
       if (!mime) { K.status('This device can\'t record video from the browser.'); running = false; return null; }
       rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 5e6 }); rec.ondataavailable = e => e.data.size && chunks.push(e.data); rec.start(250); }
-    musicSrc?.start();
+    musicSrc?.start(); voSrc?.start(ac.currentTime + 0.3);
     const btn = record ? $('#v-export') : $('#v-prev'), label = btn.textContent; btn.textContent = '■ Stop';
     for (const it of items) { if (stopFlag) break; const d = durOf(it), t0 = performance.now();
       let vsrc = null; if (it.kind === 'video') { it.el.currentTime = it.inP; await new Promise(r => { it.el.onseeked = r; setTimeout(r, 800); }); it.el.muted = !it.sound;
         if (it.sound) { try { if (!it.node) it.node = ac.createMediaElementSource(it.el); vsrc = it.node; vsrc.connect(out); if (record) vsrc.connect(ac.destination); } catch (e) {} } await it.el.play().catch(() => {}); }
       await new Promise(res => { (function frame(){ const local = (performance.now() - t0) / 1000; if (local >= d || stopFlag) { res(); return; } paint(it, local); $('#v-time').textContent = fmtT(items.slice(0, items.indexOf(it)).reduce((s, x) => s + durOf(x), 0) + local) + ' / ' + fmtT(total()); requestAnimationFrame(frame); })(); });
       if (it.kind === 'video') { it.el.pause(); try { vsrc?.disconnect(); } catch (e) {} } }
-    try { musicSrc?.stop(); } catch (e) {} btn.textContent = label; running = false;
+    try { musicSrc?.stop(); } catch (e) {} try { voSrc?.stop(); } catch (e) {} btn.textContent = label; running = false;
     if (record) { await new Promise(r => { rec.onstop = r; rec.stop(); }); await ac.close(); if (stopFlag) return null; return new Blob(chunks, { type: mime.split(';')[0] }); }
     await ac.close(); return null;
   }
@@ -270,4 +276,5 @@ Return an opening and closing title card, a caption (max 8 words) for each exist
     });
   };
   list(); drawAt(0);
+  return { refresh: pickShared };
 }

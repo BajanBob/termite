@@ -14,6 +14,7 @@ const ICON = {
   picture: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 17-5-5-9 8"/>',
   jingle: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   video: '<rect x="2" y="5" width="15" height="14" rx="2"/><path d="m17 10 5-3v10l-5-3z"/>',
+  voice: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/>',
   ai: '<path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/><circle cx="12" cy="12" r="4"/>',
   about: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h0"/>',
 };
@@ -25,9 +26,10 @@ const STUDIOS = [
   { id: 'plan', name: 'Business Plan Writer', blurb: 'Full plan, section by section, plus projections.', keys: /business plan|plan for|grant|bank loan application|executive summary|start.?up plan/ },
   { id: 'picture', name: 'Picture Editor', blurb: 'Crop, adjust, filters, text, drawing, AI captions.', keys: /photo|picture|image|crop|edit (a|my) (pic|photo)|filter|resize|jpe?g|png/ },
   { id: 'jingle', name: 'Jingle & Music Studio', blurb: 'Lyrics, chords and melody played by a built-in band.', keys: /jingle|song|music|lyrics|melody|tune|beat|advert(isement)? song|radio ad/ },
+  { id: 'voice', name: 'VoiceOver', blurb: 'Scripts voiced by AI voices, your own recording or a hired actor.', keys: /voice.?over|narrat|voice actor|narrator|read (it|this) aloud|voice for|announcer/ },
   { id: 'video', name: 'Video & Movie Maker', blurb: 'Clips, photos, titles, captions and music to video.', keys: /video|movie|film|clip|reel|tiktok|youtube|status|slideshow|montage/ },
 ];
-const FIELD = { harry: '#h-ask', pitch: '#p-one', brochure: '#b-what', plan: '#bp-what', jingle: '#j-msg' };
+const FIELD = { harry: '#h-ask', pitch: '#p-one', brochure: '#b-what', plan: '#bp-what', jingle: '#j-msg', voice: '#vo-brief' };
 
 /* ---------- learns what you use, to suggest it (on this device only) ---------- */
 const USE = 'termite.kiosk.use';
@@ -84,6 +86,7 @@ async function mountStudio(id){
   if (id === 'harry') apis[id] = (await import('./harry.js')).mount(p, K);
   else if (['pitch', 'brochure', 'plan'].includes(id)) apis[id] = (await import('./agents.js'))[id](p, K) || null;
   else if (['picture', 'jingle', 'video'].includes(id)) apis[id] = (await import('./media.js'))[id](p, K) || null;
+  else if (id === 'voice') apis[id] = (await import('./voice.js')).voice(p, K);
   else if (id === 'home') apis[id] = home(p); else if (id === 'ai') apis[id] = aiPane(p); else if (id === 'about') apis[id] = about(p);
   return apis[id];
 }
@@ -96,6 +99,8 @@ async function show(id, intent){
   if (STUDIOS.some(s => s.id === id)) used(id);
   if (id === 'finance') setTimeout(() => api?.kit?.(), 60);
   if (id === 'home') refreshHome();
+  api?.refresh?.();
+  if (id === 'voice' && intent) panes.voice.querySelector('details')?.setAttribute('open', '');
   if (intent && FIELD[real]) { const el = panes[real].querySelector(FIELD[real]); if (el) { if (real === 'harry' && panes.harry.querySelector('#h-agent').hidden) api.openAgent?.(); el.value = intent; el.focus(); } }
 }
 
@@ -120,7 +125,7 @@ function home(p){
   return {};
 }
 async function route(q){
-  const hits = STUDIOS.filter(s => s.keys.test(q.toLowerCase()));
+  const ql = q.toLowerCase(), hits = STUDIOS.map(s => ({ ...s, at: ql.search(s.keys) })).filter(s => s.at >= 0).sort((a, b) => a.at - b.at);
   if (hits.length === 1) return hits[0].id;
   if ((await ai.usable()).length) { try { const { data } = await ai.askJSON(`Pick the one studio that best fits this request: "${q}". Studios: ${STUDIOS.map(s => `${s.id} (${s.blurb})`).join('; ')}. JSON: {"studio":"id"}`, { maxTokens: 200, mode: 'fallback' }); if (STUDIOS.some(s => s.id === data.studio)) return data.studio; } catch (e) {} }
   return hits[0]?.id || 'harry';
