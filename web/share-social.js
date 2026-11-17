@@ -32,8 +32,22 @@ async function build(){ const k = fmtKey(); return job().make[k].build(); }
 const help = t => { $('#sh-help').textContent = t; };
 
 /* ---------- WhatsApp: straight into WhatsApp on Android ---------- */
+const desktopApp = !!(window.termiteNet && window.termiteNet.shareFile);
 $('#sh-wa').addEventListener('click', async e => {
-  if (!android || !window.TermiteAndroid.shareTo) return;      // other devices: save first, then the wa.me link opens WhatsApp
+  if (desktopApp) {                                            // Windows/Linux app: a wa.me link can't carry a file, so put the file on the clipboard
+    e.preventDefault(); e.stopImmediatePropagation(); help('Preparing the file for WhatsApp…');
+    try { const { blob, filename } = await build();
+      const r = await window.termiteNet.shareFile(new Uint8Array(await blob.arrayBuffer()), filename, 'whatsapp');
+      if (!r || !r.ok) { help('Couldn\'t prepare the file: ' + (r && r.error || 'unknown error')); return; }
+      const open = r.opened === 'web' ? 'WhatsApp Web is opening in your browser' : r.opened ? 'WhatsApp is opening' : 'Open WhatsApp';
+      help(r.copied
+        ? `${open}. The file "${filename}" is copied: open the chat, click in the message box and press Ctrl+V, then Send. If it doesn't paste, drag the file in from the folder that just opened (Downloads › Termite).`
+        : `${open}. Open the chat, then drag "${filename}" in from the folder that just opened (Downloads › Termite), or click the paperclip › Document and pick it from there.`);
+      T.status(r.copied ? 'File copied. In WhatsApp, open the chat and press Ctrl+V.' : 'Saved to Downloads › Termite. Drag it into the WhatsApp chat.', 9000);
+    } catch (err) { help('Couldn\'t prepare the file: ' + (err.message || err)); }
+    return;
+  }
+  if (!android || !window.TermiteAndroid.shareTo) return;      // web version: save first, then the wa.me link opens WhatsApp
   e.preventDefault(); help('Opening WhatsApp…');
   try { const { blob, filename } = await build(); const b64 = await toB64(blob), mime = blob.type || 'application/octet-stream';
     let r = TermiteAndroid.shareTo(b64, filename, mime, 'com.whatsapp'); if (r === 'missing') r = TermiteAndroid.shareTo(b64, filename, mime, 'com.whatsapp.w4b');

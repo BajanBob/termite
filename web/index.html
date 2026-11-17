@@ -558,12 +558,12 @@ const HELP = {
 let shareJob = null;
 async function share(job){
   shareJob = job; const keys = Object.keys(job.make);
-  $('#sh-note').textContent = inClaude ? 'Termite runs inside Claude, which can\'t pass a file straight to another app. So: save it first, then pick how to send the saved file.' : android ? 'Tap WhatsApp or Facebook, or Send… for any other app (Gmail, Bluetooth, Drive…).' : 'Save the file first, then pick how to send the saved file.';
+  $('#sh-note').textContent = inClaude ? 'Termite runs inside Claude, which can\'t pass a file straight to another app. So: save it first, then pick how to send the saved file.' : android ? 'Tap WhatsApp or Facebook, or Send… for any other app (Gmail, Bluetooth, Drive…).' : window.termiteNet?.shareFile ? 'WhatsApp: tap it and the file is copied, ready to paste into the chat. For email or Bluetooth, save the file first.' : 'Save the file first, then pick how to send the saved file.';
   $('#sh-save').dataset.label = android ? 'Send…' : '1. Save the file to this device';
   $('#sh-h').textContent = 'Send "' + job.name + '"';
   const fmt = $('#sh-fmt'); fmt.innerHTML = ''; fmt.classList.toggle('hide', keys.length < 2);
   keys.forEach((k, i) => { const l = document.createElement('label'); l.innerHTML = `<input type="radio" name="shfmt" value="${k}"${i ? '' : ' checked'}> `; l.append(job.make[k].label); fmt.append(l); });
-  const msg = `Sending you "${job.name}" (made with Termite). I've attached the file.`;
+  const msg = `Sending you "${job.name}" (made with Termite).`;
   $('#sh-wa').href = 'https://wa.me/?text=' + encodeURIComponent(msg);
   $('#sh-mail').href = 'mailto:?subject=' + encodeURIComponent(job.name) + '&body=' + encodeURIComponent('Hello,\n\n' + msg + '\n');
   $('#sh-help').textContent = ''; $('#sh-bt').setAttribute('aria-pressed', 'false');

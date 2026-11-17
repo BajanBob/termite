@@ -1,7 +1,7 @@
 {
   "name": "termite",
   "productName": "Termite",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Termite: PDFs, Word documents and the Kiosk studio of AI agents",
   "main": "main.js",
   "author": { "name": "Kammie Holder, Ai Innovation Studio", "email": "bajanbob@users.noreply.github.com" },

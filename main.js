@@ -1,5 +1,6 @@
 // Termite desktop (Windows and Linux): shows the same app as the web version, served from the app's own files.
 const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, session } = require('electron');
+const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -33,6 +34,49 @@ ipcMain.handle('termite-net', async (e, url, { method = 'POST', headers = {}, bo
     if (binary && r.ok) return { status: r.status, b64: Buffer.from(await r.arrayBuffer()).toString('base64') };
     return { status: r.status, text: await r.text() }; }
   catch (err) { return { status: 0, text: JSON.stringify({ error: { message: err.message } }) }; }
+});
+
+// Share a file to WhatsApp from the desktop. A wa.me link can only carry text, so instead:
+// save the file, copy it to the clipboard as a file (paste it into the chat with Ctrl+V),
+// show it in its folder (to drag in if paste doesn't work), and open WhatsApp.
+const run = (cmd, args, opts) => new Promise(res => execFile(cmd, args, { timeout: 15000, windowsHide: true, ...opts }, err => res(!err)));
+function safeName(n) { n = path.basename(String(n || 'document')).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').trim(); return n || 'document'; }
+function uniquePath(dir, name) {
+  const ext = path.extname(name), base = name.slice(0, name.length - ext.length);
+  let p = path.join(dir, name), i = 2;
+  while (fs.existsSync(p)) p = path.join(dir, `${base} (${i++})${ext}`);
+  return p;
+}
+async function copyFileToClipboard(file) {
+  if (process.platform === 'win32') {
+    // The path goes in through an environment variable, never into the command text.
+    return run('powershell.exe', ['-NoProfile', '-NonInteractive', '-STA', '-Command', 'Set-Clipboard -LiteralPath $env:TERMITE_FILE'], { env: { ...process.env, TERMITE_FILE: file } });
+  }
+  if (process.platform === 'linux') {
+    const uri = pathToFileURL(file).toString();
+    const pipe = (cmd, args) => new Promise(res => { try { const c = require('child_process').spawn(cmd, args, { stdio: ['pipe', 'ignore', 'ignore'], detached: true });
+      c.on('error', () => res(false)); c.stdin.end(uri + '\n'); setTimeout(() => { res(true); c.unref(); }, 400); } catch (e) { res(false); } });
+    if (process.env.WAYLAND_DISPLAY && await pipe('wl-copy', ['-t', 'text/uri-list'])) return true;
+    return pipe('xclip', ['-selection', 'clipboard', '-t', 'text/uri-list']);
+  }
+  return false;
+}
+ipcMain.handle('termite-share-file', async (e, bytes, filename, target) => {
+  if (!e.senderFrame || !String(e.senderFrame.url).startsWith('app://')) return { ok: false, error: 'Not allowed' };
+  try {
+    const dir = path.join(app.getPath('downloads'), 'Termite');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = uniquePath(dir, safeName(filename));
+    fs.writeFileSync(file, Buffer.from(bytes));
+    const copied = await copyFileToClipboard(file);
+    shell.showItemInFolder(file);
+    let opened = null;
+    if (target === 'whatsapp') {
+      const hasApp = !!app.getApplicationNameForProtocol('whatsapp://send');
+      try { await shell.openExternal(hasApp ? 'whatsapp://send' : 'https://web.whatsapp.com/'); opened = hasApp ? 'app' : 'web'; } catch (err) { opened = null; }
+    }
+    return { ok: true, path: file, folder: dir, copied, opened };
+  } catch (err) { return { ok: false, error: err.message }; }
 });
 
 app.whenReady().then(() => {
