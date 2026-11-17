@@ -558,8 +558,7 @@ const HELP = {
 let shareJob = null;
 async function share(job){
   shareJob = job; const keys = Object.keys(job.make);
-  if (android && keys.length === 1) { status('Preparing…', 0); try { const { blob, filename } = await job.make[keys[0]].build(); TermiteAndroid.share(await toB64(blob), filename, blob.type || 'application/octet-stream'); $('#status').classList.add('hide'); } catch (e) { status('Couldn\'t prepare the file: ' + (e.message || e), 6000); } return; }
-  $('#sh-note').textContent = inClaude ? 'Termite runs inside Claude, which can\'t pass a file straight to another app. So: save it first, then pick how to send the saved file.' : android ? 'Pick a format, then tap Send to choose WhatsApp, Gmail, Bluetooth or any other app.' : 'Save the file first, then pick how to send the saved file.';
+  $('#sh-note').textContent = inClaude ? 'Termite runs inside Claude, which can\'t pass a file straight to another app. So: save it first, then pick how to send the saved file.' : android ? 'Tap WhatsApp or Facebook, or Send… for any other app (Gmail, Bluetooth, Drive…).' : 'Save the file first, then pick how to send the saved file.';
   $('#sh-save').dataset.label = android ? 'Send…' : '1. Save the file to this device';
   $('#sh-h').textContent = 'Send "' + job.name + '"';
   const fmt = $('#sh-fmt'); fmt.innerHTML = ''; fmt.classList.toggle('hide', keys.length < 2);
@@ -617,7 +616,7 @@ async function save(blob, name){
   if (!downloads) { status('Saving isn\'t available in this view. Open Termite from its own page to save or share files.', 7000); return false; }
   try { await downloads.save({ filename: name, data: blob }); status('Saved "' + name + '".'); return true; } catch (e) { status(e && e.code === 'declined' ? 'Save cancelled.' : 'Couldn\'t save: ' + (e.message || e), 6000); return false; } }
 const termite = globalThis.termite = { status, share, save, ask, setMode, openPdfData: (u8, n) => openData(u8, n),
-  pdf: () => doc, viewer: () => viewer, pdfBytes: () => currentBytes(), pdfName: () => fileName,
+  pdf: () => doc, viewer: () => viewer, pdfBytes: () => currentBytes(), pdfName: () => fileName, shareJob: () => shareJob,
   openBytes: (b64, n) => openFile(new File([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], n, { type: /\.pdf$/i.test(n) ? 'application/pdf' : '' })) };
 
 /* ---------- hide & reveal (steganography, with optional encryption) ---------- */
@@ -747,6 +746,7 @@ await import('./writer.js');
 import('./wordplus.js').catch(e => console.error('Word tools:', e));
 if (location.hash === '#word') setMode('write'); else if (location.hash === '#kiosk') setMode('kiosk');
 import('./hints.js').catch(() => {});
+import('./share-social.js').catch(e => console.error('Social sharing:', e));
 </script>
 </body>
 </html>

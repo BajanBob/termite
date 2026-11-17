@@ -237,6 +237,56 @@ public class MainActivity extends Activity {
             } catch (Exception e) { return "error:" + e.getMessage(); }
         }
 
+        /** Sends the file straight to one app (e.g. com.whatsapp). Returns "ok", "missing" or "error:…". */
+        @JavascriptInterface
+        public String shareTo(String b64, String name, String mime, String pkg) {
+            try {
+                final Uri u = writeShareFile(Base64.decode(b64, Base64.DEFAULT), name);
+                final Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType(mime == null || mime.isEmpty() ? "application/octet-stream" : mime);
+                send.putExtra(Intent.EXTRA_STREAM, u);
+                send.setClipData(ClipData.newRawUri(name, u));
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                send.setPackage(pkg);
+                if (send.resolveActivity(getPackageManager()) == null) return "missing";
+                runOnUiThread(() -> { try { startActivity(send); } catch (Exception e) { toast("Couldn't open that app."); } });
+                return "ok";
+            } catch (Exception e) { return "error:" + e.getMessage(); }
+        }
+
+        /** Sends several pictures to one app (e.g. Facebook), or to the share menu if it isn't installed. */
+        @JavascriptInterface
+        public String shareImages(String jsonList, String baseName, String pkg) {
+            try {
+                org.json.JSONArray arr = new org.json.JSONArray(jsonList);
+                final java.util.ArrayList<Uri> uris = new java.util.ArrayList<>();
+                ClipData clip = null;
+                for (int i = 0; i < arr.length(); i++) {
+                    Uri u = writeShareFile(Base64.decode(arr.getString(i), Base64.DEFAULT), safe(baseName) + " " + (i + 1) + ".jpg");
+                    uris.add(u);
+                    if (clip == null) clip = ClipData.newRawUri("page", u); else clip.addItem(new ClipData.Item(u));
+                }
+                final Intent send = new Intent(uris.size() == 1 ? Intent.ACTION_SEND : Intent.ACTION_SEND_MULTIPLE);
+                send.setType("image/jpeg");
+                if (uris.size() == 1) send.putExtra(Intent.EXTRA_STREAM, uris.get(0)); else send.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
+                send.setClipData(clip);
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                String result = "fallback";
+                if (pkg != null && !pkg.isEmpty()) { send.setPackage(pkg); if (send.resolveActivity(getPackageManager()) != null) result = "ok"; else send.setPackage(null); }
+                final boolean direct = "ok".equals(result);
+                runOnUiThread(() -> startActivity(direct ? send : Intent.createChooser(send, "Post with")));
+                return result;
+            } catch (Exception e) { toast("Couldn't share the pictures: " + e.getMessage()); return "error:" + e.getMessage(); }
+        }
+
+        private Uri writeShareFile(byte[] data, String name) throws Exception {
+            File dir = new File(getCacheDir(), "share");
+            if (!dir.exists() && !dir.mkdirs()) throw new Exception("no space");
+            File f = new File(dir, safe(name));
+            try (FileOutputStream o = new FileOutputStream(f)) { o.write(data); }
+            return FileProvider.getUriForFile(MainActivity.this, getPackageName() + ".files", f);
+        }
+
         /** Opens Android's share menu (WhatsApp, Gmail, Bluetooth, Nearby Share…) with the file attached. */
         @JavascriptInterface
         public String share(String b64, String name, String mime) {

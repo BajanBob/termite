@@ -62,8 +62,10 @@ Keys are stored only on your device. The desktop and Android apps send AI reques
 A **hint of the day** pops up once a day. Click it to dismiss it.
 
 ### Share
-- On Android, Share opens the phone's share menu (WhatsApp, Gmail, Bluetooth and so on) with the file attached.
-- On Windows and Linux, save the file, then use the WhatsApp or email buttons, or send it by Bluetooth with the steps shown.
+- **WhatsApp:** on Android the file goes straight into WhatsApp (or WhatsApp Business), already attached. Elsewhere, save it and the WhatsApp button opens the chat.
+- **Facebook group:** pick a saved group, then save the file and open the group to attach it (PDF, Word, Excel, PowerPoint, text). Facebook stopped letting apps post into groups in April 2024, so this last tap is yours.
+- **Facebook Page:** Pages can't attach documents, so Termite posts pictures of the pages. On Android, Facebook opens with the pictures ready; on desktop, they're saved in a .zip to upload.
+- **Email and Bluetooth**, plus **Send…** on Android for any other app.
 
 ## Downloads
 

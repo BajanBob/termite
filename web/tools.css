@@ -80,3 +80,15 @@
 .wp-stats{border-collapse:collapse;width:100%}.wp-stats th{text-align:left;font-weight:500;color:var(--muted);padding:5px 0}.wp-stats td{text-align:right;font-variant-numeric:tabular-nums}
 @media (max-width:760px){.wp-cmts{left:12px;width:auto;top:auto;height:45vh}}
 .ribbon>*{flex:none}
+
+/* Share to WhatsApp and Facebook */
+.shgrid.six{grid-template-columns:repeat(3,1fr)}
+.sbtn[aria-pressed="true"]{border-color:var(--amber);background:var(--amber-soft)}
+.sh-panel{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0 0;background:var(--desk)}
+.sh-panel[hidden]{display:none}
+.sh-panel h3{margin:0 0 8px;font-size:16px}
+.sh-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin:6px 0}
+.sh-row .kf{flex:1;min-width:160px;margin:0}
+.sh-row a.btn{text-decoration:none;color:var(--ink);display:inline-flex;align-items:center}
+.sh-small{font-size:12.5px;margin:8px 0 0}
+#dlg-share{max-width:min(520px,94vw)}
