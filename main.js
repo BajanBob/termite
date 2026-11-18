@@ -27,7 +27,7 @@ app.on('second-instance', (e, argv) => {
   const f = fileFrom(argv); if (f) openInPage(f);
 });
 
-const AI_HOSTS = /^https:\/\/(api\.anthropic\.com|api\.venice\.ai|openrouter\.ai|api\.groq\.com|api\.elevenlabs\.io|generativelanguage\.googleapis\.com)\/|^http:\/\/(localhost|127\.0\.0\.1):11434\//;
+const AI_HOSTS = /^https:\/\/(api\.anthropic\.com|api\.venice\.ai|api\.deepseek\.com|openrouter\.ai|api\.groq\.com|api\.elevenlabs\.io|generativelanguage\.googleapis\.com)\/|^http:\/\/(localhost|127\.0\.0\.1):11434\//;
 ipcMain.handle('termite-net', async (e, url, { method = 'POST', headers = {}, body, binary = false } = {}) => {
   if (!AI_HOSTS.test(url)) return { status: 403, text: JSON.stringify({ error: { message: 'Termite only talks to known AI services.' } }) };
   try { const r = await net.fetch(url, { method, headers, body: method === 'GET' ? undefined : body });

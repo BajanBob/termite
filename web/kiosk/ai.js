@@ -4,16 +4,18 @@ const STORE = 'termite.ai.v1';
 export const PROVIDERS = {
   claude:     { label: 'Claude (Anthropic API)', kind: 'anthropic', base: 'https://api.anthropic.com/v1', model: 'claude-sonnet-5-5', keyUrl: 'https://console.anthropic.com/settings/keys', note: 'Paid API key.' },
   venice:     { label: 'Venice AI', kind: 'openai', base: 'https://api.venice.ai/api/v1', model: 'zai-org-glm-5-1', keyUrl: 'https://venice.ai/settings/api', note: 'API key with credits. Use "Load models" to pick any Venice text model.' },
+  deepseek:   { label: 'DeepSeek', kind: 'openai', base: 'https://api.deepseek.com', model: 'deepseek-flash', keyUrl: 'https://platform.deepseek.com/api_keys', note: 'Low-cost API key with credits. "deepseek-flash" is fast; "deepseek-v4-pro" thinks harder.' },
   openrouter: { label: 'OpenRouter free models', kind: 'openai', base: 'https://openrouter.ai/api/v1', model: 'openrouter/free', keyUrl: 'https://openrouter.ai/keys', note: 'Free key. "openrouter/free" picks a free model for you.', free: true },
   groq:       { label: 'Groq (free tier)', kind: 'openai', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', keyUrl: 'https://console.groq.com/keys', note: 'Free key, very fast.', free: true },
   gemini:     { label: 'Google Gemini (free tier)', kind: 'openai', base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash', keyUrl: 'https://aistudio.google.com/apikey', note: 'Free key from Google AI Studio.', free: true },
   ollama:     { label: 'Ollama on this computer', kind: 'openai', base: 'http://localhost:11434/v1', model: 'llama3.2', keyUrl: 'https://ollama.com/download', note: 'Free and private: runs models on your own computer. No key.', nokey: true, free: true },
 };
 
-const defaults = () => ({ mode: 'fallback', order: ['here', 'claude', 'venice', 'openrouter', 'groq', 'gemini', 'ollama'],
+const defaults = () => ({ mode: 'fallback', order: ['here', 'claude', 'venice', 'deepseek', 'openrouter', 'groq', 'gemini', 'ollama'],
   p: Object.fromEntries(Object.keys(PROVIDERS).map(k => [k, { on: false, key: '', model: PROVIDERS[k].model }])) });
 let S = defaults();
 try { const s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s) { S = { ...defaults(), ...s, p: { ...defaults().p, ...s.p } }; for (const k in S.p) S.p[k] = { ...defaults().p[k], ...S.p[k] }; } } catch (e) {}
+for (const k of ['here', ...Object.keys(PROVIDERS)]) if (!S.order.includes(k)) S.order.push(k);   // providers added in later versions
 export const settings = () => S;
 export function saveSettings(){ try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} }
 
@@ -75,6 +77,13 @@ function parse(r){
   if (r.status >= 400 || j.error) throw new Error(`HTTP ${r.status}: ${j.error?.message || j.error || 'request failed'}`);
   return j;
 }
+
+/** Ask one named model directly (Matrix's assistants). id: 'here' or a provider id. */
+export async function askOne(id, prompt, { system = '', maxTokens = 3000, signal } = {}){
+  const messages = typeof prompt === 'string' ? [{ role: 'user', content: prompt }] : prompt;
+  return { text: await callOne(id, messages, system, maxTokens, signal), by: nameOf(id) };
+}
+export async function ready(id){ if (id === 'here') return !!(await claudeHere()); const c = S.p[id]; return !!(c?.on && (c.key || PROVIDERS[id]?.nokey)); }
 
 /** Ask the coalition. prompt: string or [{role,content}]. Returns {text, by}. */
 export async function ask(prompt, { system = '', maxTokens = 4000, onStatus = () => {}, signal, mode } = {}){

@@ -8,11 +8,11 @@ on:
     inputs:
       release_tag:
         description: Release tag
-        default: termite-v1.5
+        default: termite-v1.6
 permissions:
   contents: write
 env:
-  TAG: ${{ github.event.inputs.release_tag || 'termite-v1.5' }}
+  TAG: ${{ github.event.inputs.release_tag || 'termite-v1.6' }}
 
 jobs:
   windows:

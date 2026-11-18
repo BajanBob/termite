@@ -61,6 +61,9 @@ Keys are stored only on your device. The desktop and Android apps send AI reques
 ### Every day
 A **hint of the day** pops up once a day. Click it to dismiss it.
 
+### Matrix (in Kiosk)
+Three AI assistants in one place: **Claude** (Anthropic), **DeepSeek** and **DaVinci**, Termite's own creative director, which runs on any AI you connect. Chat with one, or ask **all three** the same question, see the answers side by side, and blend the best into one. Tick "Include my open document" to ask about the PDF or Word file you have open. Answers can be copied, opened in Word or read aloud. Claude works with no key inside the Claude app; elsewhere add an Anthropic key. DeepSeek needs a DeepSeek API key (Kiosk › AI settings).
+
 ### Share
 - **Smart Send:** type who should get it and how, in your own words: "WhatsApp it to Mum", "email it to sam@acme.com saying 'here's the draft'", "post in Bridgetown Business", "open my Facebook". Termite picks the app and the person, writes the message (or lets your AI write it from the document), attaches the file and opens the right chat or email. It learns who you send to and suggests them next time. People and suggestions stay on your device (Share › People).
   - **Android:** WhatsApp opens that person's chat with the file and message attached; email opens your mail app with address, subject, message and file filled in.

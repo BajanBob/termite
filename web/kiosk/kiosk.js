@@ -6,6 +6,7 @@ const host = document.getElementById('kstage');
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const ICON = {
   home: '<path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  matrix: '<circle cx="5" cy="5" r="1.6"/><circle cx="12" cy="5" r="1.6"/><circle cx="19" cy="5" r="1.6"/><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="2.6"/><circle cx="19" cy="12" r="1.6"/><circle cx="5" cy="19" r="1.6"/><circle cx="12" cy="19" r="1.6"/><circle cx="19" cy="19" r="1.6"/><path d="M6.5 6.5l3.6 3.6M17.5 6.5l-3.6 3.6M6.5 17.5l3.6-3.6M17.5 17.5l-3.6-3.6"/>',
   harry: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
   finance: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   pitch: '<rect x="3" y="4" width="18" height="12" rx="1"/><path d="M12 16v4M8 20h8M7 12l3-3 2 2 4-4"/>',
@@ -19,6 +20,7 @@ const ICON = {
   about: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h0"/>',
 };
 const STUDIOS = [
+  { id: 'matrix', name: 'Matrix', blurb: 'Claude, DeepSeek and DaVinci: chat with one, or ask all three side by side.', keys: /\bmatrix\b|\bclaude\b|deep ?seek|da ?vinci|chat with|ask (an? )?ai|\bassistant\b|brainstorm|explain|summari[sz]e|compare (the )?answers/ },
   { id: 'harry', name: 'Harry the Accountant', blurb: 'Spreadsheets with an AI accountant. Give him files and a job.', keys: /harry|spreadsheet|excel|xlsx|sheet|account|bookkeep|reconcil|p&l|profit and loss|balance sheet|ledger|invoice|expense|budget|cash ?flow|vat|tax/ },
   { id: 'finance', name: 'Financial Analysis', blurb: 'NPV, IRR, loans, break-even, ratios, forecasts.', keys: /npv|irr|loan|mortgage|break.?even|ratio|forecast|depreciat|investment|roi|payback|interest/ },
   { id: 'pitch', name: 'Pitch Deck Agent', blurb: 'An investor-ready deck, saved as PowerPoint or PDF.', keys: /pitch|deck|slides?|investor|presentation|powerpoint/ },
@@ -29,7 +31,7 @@ const STUDIOS = [
   { id: 'voice', name: 'VoiceOver', blurb: 'Scripts voiced by AI voices, your own recording or a hired actor.', keys: /voice.?over|narrat|voice actor|narrator|read (it|this) aloud|voice for|announcer/ },
   { id: 'video', name: 'Video & Movie Maker', blurb: 'Clips, photos, titles, captions and music to video.', keys: /video|movie|film|clip|reel|tiktok|youtube|status|slideshow|montage/ },
 ];
-const FIELD = { harry: '#h-ask', pitch: '#p-one', brochure: '#b-what', plan: '#bp-what', jingle: '#j-msg', voice: '#vo-brief' };
+const FIELD = { matrix: '#mx-in', harry: '#h-ask', pitch: '#p-one', brochure: '#b-what', plan: '#bp-what', jingle: '#j-msg', voice: '#vo-brief' };
 
 /* ---------- learns what you use, to suggest it (on this device only) ---------- */
 const USE = 'termite.kiosk.use';
@@ -87,6 +89,7 @@ async function mountStudio(id){
   else if (['pitch', 'brochure', 'plan'].includes(id)) apis[id] = (await import('./agents.js'))[id](p, K) || null;
   else if (['picture', 'jingle', 'video'].includes(id)) apis[id] = (await import('./media.js'))[id](p, K) || null;
   else if (id === 'voice') apis[id] = (await import('./voice.js')).voice(p, K);
+  else if (id === 'matrix') apis[id] = (await import('./matrix.js')).matrix(p, K);
   else if (id === 'home') apis[id] = home(p); else if (id === 'ai') apis[id] = aiPane(p); else if (id === 'about') apis[id] = about(p);
   return apis[id];
 }
@@ -135,8 +138,8 @@ async function route(q){
 function aiPane(p){
   const S = ai.settings(), inClaude = !!window.claude;
   const draw = () => {
-    p.innerHTML = `<div class="k-head"><div><h2>AI settings</h2><p>Kiosk uses a coalition of AI models: Claude, Venice AI and free models. If one is busy or fails, the next takes over. Keys are kept only on this device.</p></div></div>
-    ${inClaude ? `<div class="k-note">You're using Termite inside Claude, so <b>Claude works here with no key</b>. Claude's pages can't contact other AI services, so Venice and the free models work only in the Termite apps for Windows, Linux and Android.</div>` : ''}
+    p.innerHTML = `<div class="k-head"><div><h2>AI settings</h2><p>Kiosk uses a coalition of AI models: Claude, Venice AI, DeepSeek and free models. If one is busy or fails, the next takes over. Keys are kept only on this device.</p></div></div>
+    ${inClaude ? `<div class="k-note">You're using Termite inside Claude, so <b>Claude works here with no key</b>. Claude's pages can't contact other AI services, so Venice, DeepSeek and the free models work only in the Termite apps for Windows, Linux and Android.</div>` : ''}
     <div class="k-card"><h4>How the coalition works</h4><label class="k-check"><input type="radio" name="mode" value="fallback" ${S.mode === 'fallback' ? 'checked' : ''}> <span><b>Fastest</b>: use the first model in the list, fall back to the next if it fails.</span></label>
       <label class="k-check"><input type="radio" name="mode" value="council" ${S.mode === 'council' ? 'checked' : ''}> <span><b>Council</b>: ask up to three models at once, then merge the best of their answers. Slower, often better.</span></label></div>
     <div class="k-provs">${S.order.map((id, i) => id === 'here' ? `<div class="k-card prov"><div class="prov-h"><b>Claude in Claude</b><span class="badge ${inClaude ? 'ok' : ''}">${inClaude ? 'Available' : 'Only inside Claude'}</span><span class="ord"><button class="kb ic" data-up="${i}" aria-label="Move up">↑</button><button class="kb ic" data-dn="${i}" aria-label="Move down">↓</button></span></div><p class="muted">Uses your Claude account when Termite is opened as a Claude page.</p></div>`
@@ -161,7 +164,8 @@ function about(p){
   <div class="k-card"><h4>License</h4><p><b>Termite and Kiosk © 2026 Kammie Holder, Ai Innovation Studio.</b><br>Licensed under the Apache License, Version 2.0.</p></div>
   <div class="k-card"><h4>How the smart features work</h4><ul>
     <li><b>Agentic:</b> Harry and the writing agents plan, act, check their own results and fix errors before handing over.</li>
-    <li><b>Coalition AI:</b> Claude, Venice AI and free models (OpenRouter, Groq, Gemini, Ollama), with automatic fallback or a council that merges answers.</li>
+    <li><b>Matrix:</b> three assistants. Claude (Anthropic) and DeepSeek connect to their own services; DaVinci is Termite's own creative director and runs on any AI you connect. Ask one, or all three side by side and blend the best.</li>
+    <li><b>Coalition AI:</b> Claude, Venice AI, DeepSeek and free models (OpenRouter, Groq, Gemini, Ollama), with automatic fallback or a council that merges answers.</li>
     <li><b>Predictive:</b> Harry's forecasts test several methods on your own recent figures and pick the most accurate; anomaly checks flag unusual numbers.</li>
     <li><b>Learns your habits:</b> the home screen suggests studios from what you use and when, kept only on this device.</li>
     <li><b>Private by design:</b> your files are processed on your device. Text goes only to the AI services you switch on.</li></ul></div>

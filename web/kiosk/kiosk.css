@@ -223,3 +223,52 @@
 .hr-text{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--desk);color:var(--ink);font:13px/1.5 ui-monospace,Consolas,monospace;margin:8px 0}
 .hr-text[hidden]{display:none}
 a.kb{text-decoration:none}
+/* Matrix */
+.mx-tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;margin-bottom:10px}
+.mx-tab{display:flex;align-items:center;gap:10px;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);cursor:pointer;position:relative;font:inherit}
+.mx-tab:hover{border-color:var(--amber)}
+.mx-tab[aria-selected="true"]{border-color:var(--amber);background:var(--amber-soft);box-shadow:0 0 0 1px var(--amber) inset}
+.mx-tab span{display:flex;flex-direction:column;min-width:0}
+.mx-tab small{color:var(--muted);font-size:12px;line-height:1.3}
+.mx-av{--c:#888;flex:none;width:34px;height:34px;border-radius:10px;display:inline-grid;place-items:center;font-weight:700;font-size:16px;color:#fff;background:linear-gradient(135deg,var(--c),color-mix(in srgb,var(--c) 60%,#000))}
+.mx-dot{position:absolute;top:9px;right:10px;width:8px;height:8px;border-radius:50%;background:#bbb}
+.mx-dot.on{background:#22a35a;box-shadow:0 0 0 3px rgba(34,163,90,.18)}
+.mx-setup{border:1px dashed var(--amber);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:13.5px;line-height:1.5;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.mx-setup[hidden]{display:none}
+.mx-stage{border:1px solid var(--line);border-radius:12px;background:var(--desk);padding:12px;min-height:260px;max-height:58vh;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.mx-empty{margin:auto;text-align:center;color:var(--muted);max-width:52ch;line-height:1.5}
+.mx-empty .mx-av{margin:0 3px 8px}
+.mx-msg{display:flex;gap:8px;align-items:flex-start}
+.mx-msg.me{justify-content:flex-end}
+.mx-bubble{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px 12px;max-width:min(78ch,100%);line-height:1.55;font-size:14px;overflow-wrap:anywhere}
+.mx-msg.me .mx-bubble{background:var(--amber-soft);border-color:transparent}
+.mx-bubble.err{border-color:var(--danger);color:var(--danger)}
+.mx-bubble p{margin:0 0 8px}.mx-bubble p:last-child{margin-bottom:0}
+.mx-bubble ul,.mx-bubble ol{margin:4px 0 8px;padding-left:20px}
+.mx-bubble h4,.mx-bubble h5,.mx-bubble h6{margin:8px 0 4px}
+.mx-bubble pre{background:var(--desk);border:1px solid var(--line);border-radius:8px;padding:8px;overflow:auto;font-size:12.5px}
+.mx-bubble code{font-family:ui-monospace,Consolas,monospace;font-size:.92em}
+.mx-by,.mx-att{display:block;color:var(--muted);font-size:11.5px;margin-top:6px}
+.mx-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.mx-acts .kb{height:26px;font-size:12px;padding:0 9px}
+.mx-think{color:var(--muted);animation:mxp 1.2s ease-in-out infinite}
+@keyframes mxp{50%{opacity:.4}}
+.mx-round{display:flex;flex-direction:column;gap:8px}
+.mx-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.mx-col{display:flex;flex-direction:column;min-width:0}
+.mx-col .mx-bubble{max-width:none;flex:1}
+.mx-colh{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.mx-colh .mx-av{width:26px;height:26px;font-size:13px;border-radius:8px}
+.mx-blend{border:1px solid var(--amber);border-radius:12px;padding:10px;background:var(--panel)}
+.mx-blend .mx-bubble{max-width:none;border:0;padding:0}
+.mx-blendbtn{align-self:flex-start}
+.mx-starters{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 6px}
+.mx-compose{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:8px}
+.mx-compose textarea{width:100%;border:0;background:transparent;color:var(--ink);font:inherit;font-size:14.5px;resize:vertical;outline:none;min-height:44px}
+.mx-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mx-bar .spacer{flex:1}
+.mx-bar .kf.inline select{height:30px;padding:0 6px}
+@media (max-width:760px){.mx-cols{grid-template-columns:1fr}}
+@media print{.mx-tabs,.mx-compose,.mx-starters{display:none}}
+.mx-av.mx-all{background:conic-gradient(from 200deg,#d97757,#4d6bfe,#b8860b,#d97757)}
+.mx-bar [hidden],.mx-tabs [hidden]{display:none!important}

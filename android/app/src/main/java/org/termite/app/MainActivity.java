@@ -180,10 +180,10 @@ public class MainActivity extends Activity {
     }
 
     private static final java.util.regex.Pattern AI_HOSTS = java.util.regex.Pattern.compile(
-            "^https://(api\\.anthropic\\.com|api\\.venice\\.ai|openrouter\\.ai|api\\.groq\\.com|api\\.elevenlabs\\.io|generativelanguage\\.googleapis\\.com)/.*|^http://(localhost|127\\.0\\.0\\.1):11434/.*");
+            "^https://(api\\.anthropic\\.com|api\\.venice\\.ai|api\\.deepseek\\.com|openrouter\\.ai|api\\.groq\\.com|api\\.elevenlabs\\.io|generativelanguage\\.googleapis\\.com)/.*|^http://(localhost|127\\.0\\.0\\.1):11434/.*");
 
     class Bridge {
-        /** Kiosk's AI requests (Venice, Groq, Gemini, OpenRouter, Anthropic, Ollama). Answers via termiteNetDone(id, status, text). */
+        /** Kiosk's AI requests (Venice, DeepSeek, Groq, Gemini, OpenRouter, Anthropic, Ollama). Answers via termiteNetDone(id, status, text). */
         @JavascriptInterface
         public void http(final int id, final String url, final String method, final String headersJson, final String body) { request(id, url, method, headersJson, body, false); }
 
