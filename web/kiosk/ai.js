@@ -46,20 +46,21 @@ export async function usable(){
   const out = [];
   for (const id of S.order) {
     if (id === 'here') { if (await claudeHere()) out.push('here'); continue; }
+    if (!PROVIDERS[id] || (S.freeOnly && !PROVIDERS[id].free) || isResting(id)) continue;
     const c = S.p[id]; if (c?.on && (c.key || PROVIDERS[id].nokey)) out.push(id);
   }
   return out;
 }
 export const nameOf = id => id === 'here' ? 'Claude (in Claude)' : PROVIDERS[id].label;
 
-async function callOne(id, messages, system, maxTokens, signal){
+async function callOne(id, messages, system, maxTokens, signal, modelOverride){
   if (id === 'here') {
     const s = await claudeHere(); if (!s) throw new Error('Claude is not available here');
     const msgs = messages.map((m, i) => ({ role: m.role, content: (i === 0 && system ? system + '\n\n' : '') + m.content }));
     const r = await s(msgs, { modelTier: maxTokens > 3000 ? 'complex' : 'default', cache: false, signal });
     return r.text;
   }
-  const P = PROVIDERS[id], c = S.p[id], model = c.model || P.model;
+  const P = PROVIDERS[id], c = S.p[id], model = modelOverride || c.model || P.model;
   if (P.kind === 'anthropic') {
     const r = await http(P.base + '/messages', { headers: { 'content-type': 'application/json', 'x-api-key': c.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({ model, max_tokens: maxTokens, system: system || undefined, messages }) });
@@ -79,9 +80,26 @@ function parse(r){
 }
 
 /** Ask one named model directly (Matrix's assistants). id: 'here' or a provider id. */
-export async function askOne(id, prompt, { system = '', maxTokens = 3000, signal } = {}){
+export async function askOne(id, prompt, { system = '', maxTokens = 3000, signal, model } = {}){
   const messages = typeof prompt === 'string' ? [{ role: 'user', content: prompt }] : prompt;
-  return { text: await callOne(id, messages, system, maxTokens, signal), by: nameOf(id) };
+  try { return { text: await callOne(id, messages, system, maxTokens, signal, model), by: nameOf(id) + (model ? ` · ${model.replace(/^[^/]+\//, '')}` : '') }; }
+  catch (e) { if (isBilling(e)) rest(id); throw e; }
+}
+export const isPaid = id => id !== 'here' && !PROVIDERS[id]?.free;
+/** "No credit" style errors: the account needs topping up, so stop asking it for a while. */
+export const isBilling = e => /credit|balance|billing|quota|insufficient|payment|402|purchase|top.?up/i.test(String(e?.message || e));
+const resting = {};
+function rest(id){ if (isPaid(id)) resting[id] = Date.now() + 30 * 60e3; }
+function isResting(id){ return (resting[id] || 0) > Date.now(); }
+export const restingNow = id => isResting(id);
+/** A free DeepSeek model on OpenRouter, if one is offered today (they change often). */
+let freeDS = null;
+export async function freeDeepSeek(){
+  if (freeDS) return freeDS;
+  const pick = ids => { const free = ids.filter(m => /^deepseek\//.test(m) && /:free$/.test(m));
+    for (const re of [/v4.*flash/, /v4/, /chat-v3\.1/, /chat/, /r1-0528:free/, /r1/]) { const m = free.find(x => re.test(x)); if (m) return m; } return free[0] || null; };
+  try { freeDS = pick(await listModels('openrouter')); } catch (e) {}
+  return freeDS ||= 'deepseek/deepseek-v4-flash:free';
 }
 export async function ready(id){ if (id === 'here') return !!(await claudeHere()); const c = S.p[id]; return !!(c?.on && (c.key || PROVIDERS[id]?.nokey)); }
 
@@ -104,7 +122,7 @@ export async function ask(prompt, { system = '', maxTokens = 4000, onStatus = ()
   for (const id of ids) {
     onStatus(`Working with ${nameOf(id)}…`);
     try { return { text: await callOne(id, messages, system, maxTokens, signal), by: nameOf(id) }; }
-    catch (e) { if (e.name === 'AbortError') throw e; errs.push(`${nameOf(id)}: ${e.message || e}`); }
+    catch (e) { if (e.name === 'AbortError') throw e; if (isBilling(e)) rest(id); errs.push(`${nameOf(id)}: ${e.message || e}`); }
   }
   throw new Error('Every AI failed. ' + errs.join(' · '));
 }

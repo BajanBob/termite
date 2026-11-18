@@ -272,3 +272,5 @@ a.kb{text-decoration:none}
 @media print{.mx-tabs,.mx-compose,.mx-starters{display:none}}
 .mx-av.mx-all{background:conic-gradient(from 200deg,#d97757,#4d6bfe,#b8860b,#d97757)}
 .mx-bar [hidden],.mx-tabs [hidden]{display:none!important}
+.mx-dot.free{background:#2e8bd6;box-shadow:0 0 0 3px rgba(46,139,214,.18)}
+.mx-tabs{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
